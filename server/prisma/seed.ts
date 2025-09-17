@@ -3,22 +3,25 @@ import fs from "fs";
 import path from "path";
 const prisma = new PrismaClient();
 
-async function deleteAllData(orderedFileNames: string[]) {
-  const modelNames = orderedFileNames.map((fileName) => {
-    const modelName = path.basename(fileName, path.extname(fileName));
-    return modelName.charAt(0).toUpperCase() + modelName.slice(1);
-  });
+async function deleteAllData() {
+  // Delete in dependency order: children first, then parents
+  const deletionOrder = [
+    "ExpenseByCategory",
+    "Sales",
+    "Purchases",
+    "SalesSummary",
+    "PurchaseSummary",
+    "Expenses",
+    "Users",
+    "Products",
+    "ExpenseSummary",
+  ];
 
-  for (const modelName of modelNames) {
+  for (const modelName of deletionOrder) {
     const model: any = prisma[modelName as keyof typeof prisma];
-    if (model) {
-      await model.deleteMany({});
-      console.log(`Cleared data from ${modelName}`);
-    } else {
-      console.error(
-        `Model ${modelName} not found. Please ensure the model name is correctly specified.`
-      );
-    }
+    if (!model) continue;
+    await model.deleteMany({});
+    console.log(`Cleared data from ${modelName}`);
   }
 }
 
@@ -37,17 +40,57 @@ async function main() {
     "expenseByCategory.json",
   ];
 
-  await deleteAllData(orderedFileNames);
+  await deleteAllData();
 
   for (const fileName of orderedFileNames) {
     const filePath = path.join(dataDirectory, fileName);
-    const jsonData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    let jsonData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
     const modelName = path.basename(fileName, path.extname(fileName));
     const model: any = prisma[modelName as keyof typeof prisma];
 
     if (!model) {
       console.error(`No Prisma model matches the file name: ${fileName}`);
       continue;
+    }
+
+    // Replace product names with realistic supermarket items for dev
+    if (fileName === "products.json") {
+      const realisticNames = [
+        "Royal Aroma Rice 5kg",
+        "Fortune Vegetable Oil 1L",
+        "Peak Milk 1L",
+        "Kings Bread Loaf",
+        "Golden Penny Spaghetti",
+        "Sardine in Oil (Tin)",
+        "Blue Band Margarine 250g",
+        "Indomie Instant Noodles",
+        "Fresh Tomatoes Pack",
+        "Nestlé Milo 400g",
+        "Coca-Cola 1.5L",
+        "Bottled Water 1.5L",
+        "Yoghurt Drink 500ml",
+        "Weetabix Cereal",
+        "Cornflakes 500g",
+        "Sugar 1kg",
+        "Salt 1kg",
+        "Onions 1kg",
+        "Tissue Roll (4 pack)",
+        "Detergent Powder",
+        "Hand Wash 500ml",
+        "Toothpaste 140g",
+        "Toothbrush (2 pack)",
+        "Shampoo 400ml",
+        "Bar Soap 120g",
+        "Body Lotion 400ml",
+        "Baby Diapers (Small Pack)",
+        "Rice 25kg",
+        "Beans 5kg",
+        "Chicken Wings (Frozen)"
+      ];
+      jsonData = jsonData.map((item: any, idx: number) => ({
+        ...item,
+        name: realisticNames[idx % realisticNames.length],
+      }));
     }
 
     for (const data of jsonData) {
