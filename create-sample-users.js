@@ -6,8 +6,7 @@ const { createClient } = require('@supabase/supabase-js')
 
 // Replace with your Supabase project details
 const SUPABASE_URL = 'https://stiwfpflnsgzhwmjamoc.supabase.co'
-const SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN0aXdmcGZsbnNnemh3bWphbW9jIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MDQ2MzUyMiwiZXhwIjoyMDc2MDM5NTIyfQ.NlMQ8Gk89KlDLFi0DLcmifM6FHuS6rgv6RcdD5AKPMQ'
-
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
 // Initialize Supabase client with service role key (has admin privileges)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: {
