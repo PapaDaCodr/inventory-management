@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import Navbar from "@/app/(components)/Navbar";
 import Sidebar from "@/app/(components)/Sidebar";
 import StoreProvider, { useAppSelector } from "./redux";
-import { useAuth } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
 const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   const isSidebarCollapsed = useAppSelector(
@@ -13,7 +13,6 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
   );
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
   const pathname = usePathname();
-  const { user } = useAuth();
 
   // Check if current route is an auth route
   const isAuthRoute = pathname?.startsWith('/auth');
@@ -33,23 +32,25 @@ const DashboardLayout = ({ children }: { children: React.ReactNode }) => {
     );
   }
 
-  // For authenticated routes, render with sidebar/navbar
+  // For authenticated routes, render with sidebar/navbar and protection
   return (
-    <div
-      className={`${
-        isDarkMode ? "dark" : "light"
-      } flex bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full min-h-screen`}
-    >
-      <Sidebar />
-      <main
-        className={`flex flex-col w-full h-full py-7 px-9 bg-gray-50 dark:bg-gray-900 ${
-          isSidebarCollapsed ? "md:pl-24" : "md:pl-72"
-        }`}
+    <ProtectedRoute>
+      <div
+        className={`${
+          isDarkMode ? "dark" : "light"
+        } flex bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 w-full min-h-screen`}
       >
-        <Navbar />
-        {children}
-      </main>
-    </div>
+        <Sidebar />
+        <main
+          className={`flex flex-col w-full h-full py-7 px-9 bg-gray-50 dark:bg-gray-900 ${
+            isSidebarCollapsed ? "md:pl-24" : "md:pl-72"
+          }`}
+        >
+          <Navbar />
+          {children}
+        </main>
+      </div>
+    </ProtectedRoute>
   );
 };
 

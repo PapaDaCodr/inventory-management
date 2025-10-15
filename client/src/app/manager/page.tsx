@@ -39,6 +39,7 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { dashboardApi, suppliersApi, inventoryApi } from '@/lib/supabase-api'
+import { formatCurrency } from '@/lib/currency'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -122,7 +123,7 @@ export default function ManagerDashboard() {
                   <DollarSign className="text-green-500" size={32} />
                   <Box>
                     <Typography variant="h4">
-                      ${(metrics.totalInventoryValue || 0).toLocaleString()}
+                      {formatCurrency(metrics.totalInventoryValue || 0)}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       Inventory Value
@@ -232,11 +233,11 @@ export default function ManagerDashboard() {
                     </Alert>
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" gutterBottom>
-                        Monthly Revenue Target: $50,000
+                        Monthly Revenue Target: {formatCurrency(50000)}
                       </Typography>
                       <LinearProgress variant="determinate" value={75} sx={{ mb: 1 }} />
                       <Typography variant="caption" color="textSecondary">
-                        $37,500 achieved (75%)
+                        {formatCurrency(37500)} achieved (75%)
                       </Typography>
                     </Box>
                     <Box sx={{ mb: 2 }}>
@@ -262,7 +263,7 @@ export default function ManagerDashboard() {
                         Today's Sales
                       </Typography>
                       <Typography variant="h5" color="success.main">
-                        $2,847
+                        {formatCurrency(2847)}
                       </Typography>
                     </Box>
                     <Box sx={{ mb: 2 }}>

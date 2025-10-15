@@ -1,32 +1,39 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
-import { CircularProgress, Box } from '@mui/material'
+import LoadingScreen from '@/components/LoadingScreen'
 
 export default function Home() {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const [redirecting, setRedirecting] = useState(false)
 
   useEffect(() => {
     if (!loading) {
-      if (user) {
-        router.push('/dashboard')
-      } else {
-        router.push('/auth/login')
-      }
+      setRedirecting(true)
+
+      // Small delay to show redirect message
+      const timer = setTimeout(() => {
+        if (user) {
+          router.push('/dashboard')
+        } else {
+          router.push('/auth/login')
+        }
+      }, 100)
+
+      return () => clearTimeout(timer)
     }
   }, [user, loading, router])
 
-  return (
-    <Box
-      display="flex"
-      justifyContent="center"
-      alignItems="center"
-      minHeight="100vh"
-    >
-      <CircularProgress />
-    </Box>
-  )
+  const getMessage = () => {
+    if (loading) return 'Checking authentication...'
+    if (redirecting) {
+      return user ? 'Redirecting to dashboard...' : 'Redirecting to login...'
+    }
+    return 'Loading...'
+  }
+
+  return <LoadingScreen message={getMessage()} />
 }

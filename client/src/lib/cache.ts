@@ -217,6 +217,21 @@ export class CachedApiClient {
   cleanupCache(): void {
     this.cache.cleanup()
   }
+
+  /**
+   * Get data directly from cache without TTL check (for fast access)
+   */
+  getFromCache<T>(key: string): T | null {
+    return this.cache.get(key)
+  }
+
+  /**
+   * Set data directly in cache
+   */
+  setCache<T>(key: string, data: T, options: CacheOptions = {}): void {
+    const ttl = options.ttl || this.DEFAULT_TTL
+    this.cache.set(key, data, ttl)
+  }
 }
 
 // Export singleton instance

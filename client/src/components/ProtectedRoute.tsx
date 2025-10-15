@@ -3,7 +3,7 @@
 import { useAuth, UserRole } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { CircularProgress, Box, Typography } from '@mui/material'
+import LoadingScreen from './LoadingScreen'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
@@ -27,15 +27,17 @@ export default function ProtectedRoute({
         return
       }
 
-      // If user exists but no profile, redirect to complete registration
+      // If user exists but no profile, redirect to registration to create profile
       if (user && !profile) {
-        router.push('/auth/complete-registration')
+        console.warn('User exists but no profile found, redirecting to registration')
+        router.push('/auth/register')
         return
       }
 
-      // If profile is inactive, redirect to inactive page
+      // If profile is inactive, redirect to login with message
       if (profile && !profile.is_active) {
-        router.push('/auth/account-inactive')
+        console.warn('User profile is inactive')
+        router.push('/auth/login?message=account_inactive')
         return
       }
 
@@ -43,7 +45,8 @@ export default function ProtectedRoute({
       if (requiredRoles.length > 0 && profile) {
         const hasRequiredRole = requiredRoles.includes(profile.role)
         if (!hasRequiredRole) {
-          router.push('/unauthorized')
+          console.warn(`User role '${profile.role}' not authorized for required roles:`, requiredRoles)
+          router.push('/dashboard?message=unauthorized')
           return
         }
       }
@@ -52,21 +55,7 @@ export default function ProtectedRoute({
 
   // Show loading spinner while checking authentication
   if (loading) {
-    return (
-      <Box 
-        display="flex" 
-        flexDirection="column"
-        justifyContent="center" 
-        alignItems="center" 
-        minHeight="100vh"
-        gap={2}
-      >
-        <CircularProgress size={60} />
-        <Typography variant="h6" color="textSecondary">
-          Loading...
-        </Typography>
-      </Box>
-    )
+    return <LoadingScreen message="Verifying access..." />
   }
 
   // If no user, don't render children (will redirect)

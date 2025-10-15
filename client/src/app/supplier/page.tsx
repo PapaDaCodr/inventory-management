@@ -48,6 +48,7 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { productsApiCached } from '@/lib/supabase-api-cached'
+import { formatCurrency } from '@/lib/currency'
 import { startTiming, endTiming } from '@/lib/performance'
 
 interface TabPanelProps {
@@ -248,7 +249,7 @@ export default function SupplierDashboard() {
                   <DollarSign className="text-purple-500" size={32} />
                   <Box>
                     <Typography variant="h4">
-                      ${mockPurchaseOrders.reduce((sum, po) => sum + po.total_amount, 0).toLocaleString()}
+                      {formatCurrency(mockPurchaseOrders.reduce((sum, po) => sum + po.total_amount, 0))}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       Total Order Value
@@ -322,7 +323,7 @@ export default function SupplierDashboard() {
                         {new Date(po.expected_delivery).toLocaleDateString()}
                       </TableCell>
                       <TableCell>{po.items_count} items</TableCell>
-                      <TableCell>${po.total_amount.toLocaleString()}</TableCell>
+                      <TableCell>{formatCurrency(po.total_amount)}</TableCell>
                       <TableCell>
                         <Chip
                           label={formatStatus(po.status)}
@@ -404,8 +405,8 @@ export default function SupplierDashboard() {
                       <TableCell>{product.sku}</TableCell>
                       <TableCell>{product.brand || '-'}</TableCell>
                       <TableCell>{product.unit_of_measure || 'each'}</TableCell>
-                      <TableCell>${(product.cost_price || 0).toFixed(2)}</TableCell>
-                      <TableCell>${(product.base_price || 0).toFixed(2)}</TableCell>
+                      <TableCell>{formatCurrency(product.cost_price || 0)}</TableCell>
+                      <TableCell>{formatCurrency(product.base_price || 0)}</TableCell>
                       <TableCell>
                         <Chip
                           label={product.is_active ? 'Active' : 'Inactive'}

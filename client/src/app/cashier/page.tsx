@@ -34,7 +34,6 @@ import {
   ShoppingCart,
   Scan,
   CreditCard,
-  DollarSign,
   Receipt,
   User,
   Plus,
@@ -47,6 +46,7 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { productsApi } from '@/lib/supabase-api'
+import { formatCurrency } from '@/lib/currency'
 
 interface CartItem {
   id: string
@@ -181,9 +181,8 @@ export default function CashierDashboard() {
             <Card>
               <CardContent>
                 <Box display="flex" alignItems="center" gap={2}>
-                  <DollarSign className="text-green-500" size={32} />
                   <Box>
-                    <Typography variant="h4">${todaysSales.toLocaleString()}</Typography>
+                    <Typography variant="h4">{formatCurrency(todaysSales)}</Typography>
                     <Typography variant="body2" color="textSecondary">
                       Today's Sales
                     </Typography>
@@ -213,7 +212,7 @@ export default function CashierDashboard() {
                 <Box display="flex" alignItems="center" gap={2}>
                   <Calculator className="text-purple-500" size={32} />
                   <Box>
-                    <Typography variant="h4">${(todaysSales / transactionsToday).toFixed(2)}</Typography>
+                    <Typography variant="h4">{formatCurrency(todaysSales / transactionsToday)}</Typography>
                     <Typography variant="body2" color="textSecondary">
                       Average Sale
                     </Typography>
@@ -298,7 +297,7 @@ export default function CashierDashboard() {
                               {product.sku}
                             </Typography>
                             <Typography variant="body2" color="primary.main">
-                              ${(product.base_price || 0).toFixed(2)}
+                              {formatCurrency(product.base_price || 0)}
                             </Typography>
                           </CardContent>
                         </Card>
@@ -347,7 +346,7 @@ export default function CashierDashboard() {
                             </IconButton>
                           </Box>
                           <Typography variant="caption" color="textSecondary">
-                            ${item.price.toFixed(2)} each
+                            {formatCurrency(item.price)} each
                           </Typography>
                           <Box display="flex" justifyContent="between" alignItems="center" mt={1}>
                             <Box display="flex" alignItems="center" gap={1}>
@@ -368,7 +367,7 @@ export default function CashierDashboard() {
                               </IconButton>
                             </Box>
                             <Typography variant="body2" fontWeight="medium">
-                              ${item.total.toFixed(2)}
+                              {formatCurrency(item.total)}
                             </Typography>
                           </Box>
                         </Box>
@@ -381,17 +380,17 @@ export default function CashierDashboard() {
                     <Box sx={{ mb: 2 }}>
                       <Box display="flex" justifyContent="between">
                         <Typography variant="body2">Subtotal:</Typography>
-                        <Typography variant="body2">${subtotal.toFixed(2)}</Typography>
+                        <Typography variant="body2">{formatCurrency(subtotal)}</Typography>
                       </Box>
                       <Box display="flex" justifyContent="between">
                         <Typography variant="body2">Tax (8%):</Typography>
-                        <Typography variant="body2">${tax.toFixed(2)}</Typography>
+                        <Typography variant="body2">{formatCurrency(tax)}</Typography>
                       </Box>
                       <Divider sx={{ my: 1 }} />
                       <Box display="flex" justifyContent="between">
                         <Typography variant="h6">Total:</Typography>
                         <Typography variant="h6" color="primary.main">
-                          ${total.toFixed(2)}
+                          {formatCurrency(total)}
                         </Typography>
                       </Box>
                     </Box>
@@ -476,7 +475,7 @@ export default function CashierDashboard() {
           <DialogContent>
             <Box sx={{ pt: 2 }}>
               <Typography variant="h5" color="primary.main" gutterBottom>
-                Total: ${total.toFixed(2)}
+                Total: {formatCurrency(total)}
               </Typography>
               
               <FormControl fullWidth sx={{ mb: 2 }}>
@@ -503,7 +502,7 @@ export default function CashierDashboard() {
                   />
                   {amountReceived && parseFloat(amountReceived) >= total && (
                     <Alert severity="success">
-                      Change: ${change.toFixed(2)}
+                      Change: {formatCurrency(change)}
                     </Alert>
                   )}
                 </>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Shield,
   BarChart3,
@@ -11,13 +12,23 @@ import {
 
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { useAuth } from "@/contexts/AuthContext";
-import { Typography, Box, Grid, Card, CardContent, Button, CircularProgress } from "@mui/material";
+import { Typography, Box, Grid, Card, CardContent, Button, CircularProgress, Alert } from "@mui/material";
 import { cacheManager } from "@/lib/supabase-api-cached";
 import Link from "next/link";
 
 const Dashboard = () => {
   const { profile, loading: authLoading } = useAuth();
   const [dataPreloaded, setDataPreloaded] = useState(false);
+  const [message, setMessage] = useState('');
+  const searchParams = useSearchParams();
+
+  // Handle query parameters
+  useEffect(() => {
+    const messageParam = searchParams.get('message');
+    if (messageParam === 'unauthorized') {
+      setMessage('You do not have permission to access that page.');
+    }
+  }, [searchParams]);
 
   // Preload critical data in background for better performance
   useEffect(() => {
@@ -97,6 +108,12 @@ const Dashboard = () => {
 
   return (
     <ProtectedRoute>
+      {message && (
+        <Alert severity="warning" sx={{ mb: 3 }} onClose={() => setMessage('')}>
+          {message}
+        </Alert>
+      )}
+
       <Box mb={3}>
         <Typography variant="h4" component="h1" gutterBottom>
           Welcome back, {profile?.full_name}!

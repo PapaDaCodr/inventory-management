@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   Box,
@@ -22,9 +22,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  
+  const [message, setMessage] = useState('')
+
   const { signIn } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const messageParam = searchParams.get('message')
+    if (messageParam === 'account_inactive') {
+      setMessage('Your account is currently inactive. Please contact an administrator.')
+    } else if (messageParam === 'session_expired') {
+      setMessage('Your session has expired. Please log in again.')
+    }
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -67,6 +78,12 @@ export default function LoginPage() {
                 Supermarket Inventory Management System
               </Typography>
             </Box>
+
+            {message && (
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {message}
+              </Alert>
+            )}
 
             {error && (
               <Alert severity="error" sx={{ mb: 2 }}>

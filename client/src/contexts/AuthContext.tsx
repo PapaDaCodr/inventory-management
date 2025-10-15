@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { cachedApiClient, CacheKeys } from '@/lib/cache'
+import { startTiming, endTiming } from '@/lib/performance-monitor'
 
 // User roles type
 export type UserRole = 'administrator' | 'manager' | 'inventory_clerk' | 'cashier' | 'supplier'
@@ -50,24 +51,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
-      if (session?.user) {
-        fetchProfile(session.user.id)
-      } else {
-        setLoading(false)
+    let mounted = true
+
+    // Get initial session with timeout for faster initial load
+    const initializeAuth = async () => {
+      try {
+        startTiming('auth_initialization')
+        console.log('Initializing authentication...')
+
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        if (!mounted) return
+
+        if (error) {
+          console.error('Error getting session:', error)
+          endTiming('auth_initialization')
+          setLoading(false)
+          return
+        }
+
+        setSession(session)
+        setUser(session?.user ?? null)
+
+        if (session?.user) {
+          // Fetch profile in background, don't block auth loading
+          fetchProfile(session.user.id)
+        } else {
+          endTiming('auth_initialization')
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error initializing auth:', error)
+        endTiming('auth_initialization')
+        if (mounted) {
+          setLoading(false)
+        }
       }
-    })
+    }
+
+    // Initialize auth immediately
+    initializeAuth()
 
     // Listen for auth changes
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event)
+
+      if (!mounted) return
+
       setSession(session)
       setUser(session?.user ?? null)
-      
+
       if (session?.user) {
         await fetchProfile(session.user.id)
       } else {
@@ -76,41 +111,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const fetchProfile = async (userId: string) => {
     try {
+      startTiming('profile_fetch')
       console.log('Loading user profile for:', userId)
 
-      // Use cached API for user profile with 10 minute TTL
-      const profileData = await cachedApiClient.fetchWithCache(
-        CacheKeys.USER_PROFILE(userId),
-        async () => {
-          console.log('Fetching user profile from Supabase...')
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single()
+      // For initial load, try cache first, then fallback to direct fetch for speed
+      let profileData: UserProfile | null = null
 
-          if (error) throw error
-          return data as UserProfile
-        },
-        { ttl: 10 * 60 * 1000 } // 10 minutes cache
-      )
+      // Check cache first
+      profileData = cachedApiClient.getFromCache(CacheKeys.USER_PROFILE(userId))
+
+      if (!profileData) {
+        console.log('Profile not in cache, fetching from Supabase...')
+        // Direct fetch for faster initial load
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single()
+
+        if (error) throw error
+        profileData = data as UserProfile
+
+        // Cache the result for future use
+        cachedApiClient.setCache(
+          CacheKeys.USER_PROFILE(userId),
+          profileData,
+          { ttl: 10 * 60 * 1000 }
+        )
+      }
 
       setProfile(profileData)
+      endTiming('profile_fetch')
+      endTiming('auth_initialization')
       console.log('User profile loaded successfully')
 
-      // Update last login (don't cache this)
-      await supabase
+      // Update last login in background (don't await)
+      supabase
         .from('profiles')
         .update({ last_login: new Date().toISOString() })
         .eq('id', userId)
+        .then(() => console.log('Last login updated'))
+        .catch(error => console.error('Error updating last login:', error))
 
     } catch (error) {
       console.error('Error in fetchProfile:', error)
+      endTiming('profile_fetch')
+      endTiming('auth_initialization')
+      // Don't block auth flow on profile fetch error
+      setProfile(null)
     } finally {
       setLoading(false)
     }

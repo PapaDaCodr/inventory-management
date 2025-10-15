@@ -287,10 +287,26 @@ export const cacheManager = {
 
 // Auto-preload critical data on module load (client-side only)
 if (typeof window !== 'undefined') {
-  // Preload after a short delay to avoid blocking initial render
-  setTimeout(() => {
-    cacheManager.preloadCriticalData()
-  }, 1000)
+  // Use requestIdleCallback for non-blocking preload, fallback to setTimeout
+  const preloadWhenIdle = () => {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => {
+        cacheManager.preloadCriticalData()
+      }, { timeout: 5000 })
+    } else {
+      // Fallback for browsers without requestIdleCallback
+      setTimeout(() => {
+        cacheManager.preloadCriticalData()
+      }, 2000)
+    }
+  }
+
+  // Start preloading after initial render is complete
+  if (document.readyState === 'complete') {
+    preloadWhenIdle()
+  } else {
+    window.addEventListener('load', preloadWhenIdle)
+  }
 
   // Set up background refresh intervals
   setInterval(() => {
