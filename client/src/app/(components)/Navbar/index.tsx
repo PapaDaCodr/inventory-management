@@ -2,10 +2,13 @@
 
 import { useAppDispatch, useAppSelector } from "@/app/redux";
 import { setIsDarkMode, setIsSidebarCollapsed } from "@/state";
-import { Bell, Menu, Moon, Settings, Sun } from "lucide-react";
+import { Bell, Menu, Moon, Sun, LogOut, User } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import React from "react";
+import React, { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Menu as MuiMenu, MenuItem, IconButton, Avatar, Typography } from "@mui/material";
+import NotificationCenter from "@/components/NotificationCenter";
 
 const Navbar = () => {
   const dispatch = useAppDispatch();
@@ -13,6 +16,8 @@ const Navbar = () => {
     (state) => state.global.isSidebarCollapsed
   );
   const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+  const { profile, signOut } = useAuth();
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   const toggleSidebar = () => {
     dispatch(setIsSidebarCollapsed(!isSidebarCollapsed));
@@ -22,11 +27,39 @@ const Navbar = () => {
     dispatch(setIsDarkMode(!isDarkMode));
   };
 
+  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleProfileMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      handleProfileMenuClose();
+      console.log('Signing out user...');
+      await signOut();
+      console.log('User signed out successfully');
+      // Force redirect to login page
+      window.location.href = '/auth/login';
+    } catch (error) {
+      console.error('Error during sign out:', error);
+    }
+  };
+
+  const handleProfileClick = () => {
+    handleProfileMenuClose();
+    // Navigate to profile page - for now show alert
+    alert('Profile page navigation coming soon!');
+  };
+
   return (
     <div className="flex justify-between items-center w-full mb-7">
       {/* LEFT SIDE */}
       <div className="flex justify-between items-center gap-5">
         <button
+          type="button"
           className="px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100"
           onClick={toggleSidebar}
         >
@@ -50,7 +83,7 @@ const Navbar = () => {
       <div className="flex justify-between items-center gap-5">
         <div className="hidden md:flex justify-between items-center gap-5">
           <div>
-            <button onClick={toggleDarkMode}>
+            <button type="button" onClick={toggleDarkMode}>
               {isDarkMode ? (
                 <Sun className="cursor-pointer text-gray-500" size={24} />
               ) : (
@@ -58,27 +91,44 @@ const Navbar = () => {
               )}
             </button>
           </div>
-          <div className="relative">
-            <Bell className="cursor-pointer text-gray-500" size={24} />
-            <span className="absolute -top-2 -right-2 inline-flex items-center justify-center px-[0.4rem] py-1 text-xs font-semibold leading-none text-red-100 bg-red-400 rounded-full">
-              3
-            </span>
-          </div>
+          <NotificationCenter />
           <hr className="w-0 h-7 border border-solid border-l border-gray-300 mx-3" />
-          <div className="flex items-center gap-3 cursor-pointer">
-            <Image
-              src="http://localhost:8000/assets/profile.jpg"
-              alt="Profile"
-              width={50}
-              height={50}
-              className="rounded-full h-full object-cover"
-            />
-            <span className="font-semibold">Elvis</span>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={handleProfileMenuOpen}>
+            <Avatar sx={{ width: 40, height: 40 }}>
+              {profile?.full_name?.charAt(0) || 'U'}
+            </Avatar>
+            <div className="hidden md:block">
+              <Typography variant="body2" className="font-semibold">
+                {profile?.full_name || 'User'}
+              </Typography>
+              <Typography variant="caption" color="textSecondary" className="capitalize">
+                {profile?.role?.replace('_', ' ') || 'User'}
+              </Typography>
+            </div>
           </div>
+          <MuiMenu
+            anchorEl={anchorEl}
+            open={Boolean(anchorEl)}
+            onClose={handleProfileMenuClose}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            transformOrigin={{
+              vertical: 'top',
+              horizontal: 'right',
+            }}
+          >
+            <MenuItem onClick={handleProfileClick}>
+              <User className="mr-2" size={16} />
+              Profile
+            </MenuItem>
+            <MenuItem onClick={handleSignOut}>
+              <LogOut className="mr-2" size={16} />
+              Sign Out
+            </MenuItem>
+          </MuiMenu>
         </div>
-        <Link href="/settings">
-          <Settings className="cursor-pointer text-gray-500" size={24} />
-        </Link>
       </div>
     </div>
   );

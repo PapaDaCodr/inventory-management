@@ -11,17 +11,26 @@ import {
   Menu,
   SlidersHorizontal,
   User,
+  ShoppingCart,
+  Truck,
+  BarChart3,
+  Package,
+  Users,
+  CreditCard,
+  Shield,
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React from "react";
+import { useAuth, UserRole } from "@/contexts/AuthContext";
 
 interface SidebarLinkProps {
   href: string;
   icon: LucideIcon;
   label: string;
   isCollapsed: boolean;
+  requiredRoles?: UserRole[];
 }
 
 const SidebarLink = ({
@@ -29,10 +38,20 @@ const SidebarLink = ({
   icon: Icon,
   label,
   isCollapsed,
+  requiredRoles = [],
 }: SidebarLinkProps) => {
   const pathname = usePathname();
+  const { profile } = useAuth();
   const isActive =
     pathname === href || (pathname === "/" && href === "/dashboard");
+
+  // Check if user has required role
+  if (requiredRoles.length > 0 && profile) {
+    const hasRequiredRole = requiredRoles.includes(profile.role);
+    if (!hasRequiredRole) {
+      return null; // Don't render link if user doesn't have required role
+    }
+  }
 
   return (
     <Link href={href}>
@@ -81,13 +100,9 @@ const Sidebar = () => {
           isSidebarCollapsed ? "px-5" : "px-8"
         }`}
       >
-        <Image
-          src="http://localhost:8000/assets/logo.png"
-          alt="edstock-logo"
-          width={27}
-          height={27}
-          className="rounded w-8"
-        />
+        <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+          <span className="text-white font-bold text-sm">S</span>
+        </div>
         <h1
           className={`${
             isSidebarCollapsed ? "hidden" : "block"
@@ -97,6 +112,7 @@ const Sidebar = () => {
         </h1>
 
         <button
+          type="button"
           className="md:hidden px-3 py-3 bg-gray-100 rounded-full hover:bg-blue-100"
           onClick={toggleSidebar}
         >
@@ -106,42 +122,72 @@ const Sidebar = () => {
 
       {/* LINKS */}
       <div className="flex-grow mt-8">
+        {/* Common Links - Available to all authenticated users */}
         <SidebarLink
           href="/dashboard"
           icon={Layout}
           label="Dashboard"
           isCollapsed={isSidebarCollapsed}
         />
+
+        {/* Role-Specific Dashboards */}
         <SidebarLink
-          href="/inventory"
+          href="/admin"
+          icon={Shield}
+          label="Admin Panel"
+          isCollapsed={isSidebarCollapsed}
+          requiredRoles={['administrator']}
+        />
+
+        <SidebarLink
+          href="/manager"
+          icon={BarChart3}
+          label="Manager Hub"
+          isCollapsed={isSidebarCollapsed}
+          requiredRoles={['administrator', 'manager']}
+        />
+
+        <SidebarLink
+          href="/inventory-clerk"
           icon={Archive}
-          label="Inventory"
+          label="Inventory Control"
           isCollapsed={isSidebarCollapsed}
+          requiredRoles={['administrator', 'manager', 'inventory_clerk']}
         />
+
         <SidebarLink
-          href="/products"
-          icon={Clipboard}
-          label="Products"
+          href="/cashier"
+          icon={CreditCard}
+          label="POS Terminal"
           isCollapsed={isSidebarCollapsed}
+          requiredRoles={['administrator', 'manager', 'cashier']}
         />
+
         <SidebarLink
-          href="/users"
-          icon={User}
-          label="Users"
+          href="/supplier"
+          icon={Truck}
+          label="Supplier Portal"
           isCollapsed={isSidebarCollapsed}
+          requiredRoles={['administrator', 'manager', 'supplier']}
         />
+
+        {/* Legacy pages removed - functionality moved to role-based dashboards */}
+
+        {/* Note: Functionality moved to role-based dashboards */}
+        {/* Suppliers -> /supplier, POS -> /cashier, Analytics -> /manager, etc. */}
+
+        {/* Settings - Admins and Managers */}
         <SidebarLink
           href="/settings"
           icon={SlidersHorizontal}
           label="Settings"
           isCollapsed={isSidebarCollapsed}
+          requiredRoles={['administrator', 'manager']}
         />
-        <SidebarLink
-          href="/expenses"
-          icon={CircleDollarSign}
-          label="Expenses"
-          isCollapsed={isSidebarCollapsed}
-        />
+
+        {/* Note: User management moved to Admin Dashboard */}
+        {/* Note: Inventory/Products moved to role-based dashboards */}
+        {/* Note: Expenses functionality to be implemented in Manager Hub */}
       </div>
 
       {/* FOOTER */}
