@@ -158,8 +158,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('profiles')
         .update({ last_login: new Date().toISOString() })
         .eq('id', userId)
-        .then(() => console.log('Last login updated'))
-        .catch(error => console.error('Error updating last login:', error))
+        .then(
+          () => console.log('Last login updated'),
+          (error) => console.error('Error updating last login:', error)
+        )
 
     } catch (error) {
       console.error('Error in fetchProfile:', error)

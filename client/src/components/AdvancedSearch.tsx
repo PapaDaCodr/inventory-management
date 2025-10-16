@@ -31,7 +31,7 @@ import {
   ChevronUp,
   Save,
   History,
-  Clear,
+  Eraser,
 } from 'lucide-react'
 
 interface SearchFilter {
@@ -240,8 +240,8 @@ export default function AdvancedSearch({
               value={filter.value}
               onChange={(e) => updateFilter(index, { value: e.target.value })}
             >
-              <MenuItem value={true}>True</MenuItem>
-              <MenuItem value={false}>False</MenuItem>
+              <MenuItem value={'true'}>True</MenuItem>
+              <MenuItem value={'false'}>False</MenuItem>
             </Select>
           </FormControl>
         )
@@ -304,7 +304,7 @@ export default function AdvancedSearch({
           <Button
             size="small"
             onClick={clearAllFilters}
-            startIcon={<Clear />}
+            startIcon={<Eraser />}
             color="error"
           >
             Clear All

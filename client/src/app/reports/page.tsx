@@ -48,6 +48,8 @@ import {
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
 import { dashboardApi } from '@/lib/supabase-api'
+import { reportsApi } from '@/lib/supabase-api'
+
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -86,42 +88,8 @@ export default function ReportsPage() {
   const loadReportData = async () => {
     try {
       setLoading(true)
-      // Mock comprehensive report data
-      setReportData({
-        salesSummary: {
-          totalSales: 125000,
-          totalTransactions: 1250,
-          averageTransaction: 100,
-          topProducts: [
-            { name: 'Premium Coffee Beans', sales: 15000, quantity: 500 },
-            { name: 'Organic Milk', sales: 12000, quantity: 800 },
-            { name: 'Fresh Bread', sales: 10000, quantity: 1200 },
-          ]
-        },
-        inventoryReport: {
-          totalProducts: 2500,
-          lowStockItems: 45,
-          outOfStockItems: 12,
-          totalValue: 450000,
-          topCategories: [
-            { name: 'Dairy Products', value: 85000, percentage: 18.9 },
-            { name: 'Beverages', value: 72000, percentage: 16.0 },
-            { name: 'Bakery', value: 65000, percentage: 14.4 },
-          ]
-        },
-        supplierPerformance: [
-          { name: 'Fresh Foods Co.', orders: 25, onTimeDelivery: 96, rating: 4.8 },
-          { name: 'Dairy Direct', orders: 18, onTimeDelivery: 94, rating: 4.6 },
-          { name: 'Beverage Plus', orders: 22, onTimeDelivery: 89, rating: 4.2 },
-        ],
-        financialMetrics: {
-          revenue: 125000,
-          costs: 87500,
-          grossProfit: 37500,
-          profitMargin: 30,
-          monthlyGrowth: 8.5
-        }
-      })
+      const data = await reportsApi.getReportData(dateRange)
+      setReportData(data)
     } catch (error) {
       console.error('Error loading report data:', error)
     } finally {
@@ -178,7 +146,7 @@ export default function ReportsPage() {
               Comprehensive business insights and performance metrics
             </Typography>
           </Box>
-          
+
           <FormControl sx={{ minWidth: 200 }}>
             <InputLabel>Date Range</InputLabel>
             <Select
@@ -212,10 +180,10 @@ export default function ReportsPage() {
                     <Typography variant="body2" color="textSecondary">
                       Total Revenue
                     </Typography>
-                    <Chip 
-                      label={`+${reportData.financialMetrics?.monthlyGrowth}%`} 
-                      color="success" 
-                      size="small" 
+                    <Chip
+                      label={`+${reportData.financialMetrics?.monthlyGrowth}%`}
+                      color="success"
+                      size="small"
                     />
                   </Box>
                 </Box>
@@ -398,18 +366,18 @@ export default function ReportsPage() {
                     </Box>
                     <Box display="flex" justifyContent="between" alignItems="center" mb={2}>
                       <Typography variant="body2">Low Stock Items</Typography>
-                      <Chip 
-                        label={reportData.inventoryReport?.lowStockItems} 
-                        color="warning" 
+                      <Chip
+                        label={reportData.inventoryReport?.lowStockItems}
+                        color="warning"
                         size="small"
                         icon={<AlertTriangle size={16} />}
                       />
                     </Box>
                     <Box display="flex" justifyContent="between" alignItems="center" mb={2}>
                       <Typography variant="body2">Out of Stock Items</Typography>
-                      <Chip 
-                        label={reportData.inventoryReport?.outOfStockItems} 
-                        color="error" 
+                      <Chip
+                        label={reportData.inventoryReport?.outOfStockItems}
+                        color="error"
                         size="small"
                         icon={<AlertTriangle size={16} />}
                       />
@@ -489,9 +457,9 @@ export default function ReportsPage() {
                       <TableCell align="right">{supplier.rating}/5.0</TableCell>
                       <TableCell align="center">
                         <Chip
-                          label={supplier.onTimeDelivery >= 95 ? 'Excellent' : 
+                          label={supplier.onTimeDelivery >= 95 ? 'Excellent' :
                                 supplier.onTimeDelivery >= 90 ? 'Good' : 'Needs Improvement'}
-                          color={supplier.onTimeDelivery >= 95 ? 'success' : 
+                          color={supplier.onTimeDelivery >= 95 ? 'success' :
                                 supplier.onTimeDelivery >= 90 ? 'info' : 'warning'}
                           size="small"
                         />

@@ -231,7 +231,7 @@ export const inventoryApi = {
       .from('inventory')
       .select(`
         *,
-        product_join:products(name, sku, reorder_level),
+        product_join:products(name, sku, reorder_level, base_price),
         location_join:locations(name)
       `)
       .order('updated_at', { ascending: false })
@@ -257,8 +257,8 @@ export const inventoryApi = {
 
     // Filter for low stock if requested
     if (filters?.low_stock) {
-      inventory = inventory.filter(item => 
-        item.product?.reorder_level && 
+      inventory = inventory.filter(item =>
+        item.product?.reorder_level &&
         item.quantity_available <= item.product.reorder_level
       )
     }
@@ -343,33 +343,17 @@ export const usersApi = {
     contact_phone?: string
     department?: string
   }) {
-    // First create the auth user
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: userData.email,
-      password: userData.password,
-      email_confirm: true
+    // Call server-side API route that uses the Service Role key
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
     })
-
-    if (authError) throw authError
-
-    // Then create the profile
-    const { data: profileData, error: profileError } = await supabase
-      .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: userData.email,
-        full_name: userData.full_name,
-        role: userData.role,
-        employee_id: userData.employee_id,
-        contact_phone: userData.contact_phone,
-        department: userData.department,
-        is_active: true
-      })
-      .select()
-      .single()
-
-    if (profileError) throw profileError
-    return profileData
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json?.error || 'Failed to create user')
+    }
+    return json
   },
 
   async updateUser(id: string, updates: any) {
@@ -578,5 +562,142 @@ export const customersApi = {
 
     if (error) throw error
     return data
+  }
+}
+
+
+// Purchase Orders API
+export const purchaseOrdersApi = {
+  async getPurchaseOrders(filters?: { status?: string }) {
+    let query = supabase
+      .from('purchase_orders')
+      .select(`
+        id, po_number, status, order_date, expected_delivery, total_amount,
+        purchase_order_items(count)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (filters?.status) {
+      query = query.eq('status', filters.status)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+
+    // Normalize items_count from nested count
+    const normalized = (data || []).map((po: any) => ({
+      id: po.id,
+      po_number: po.po_number,
+      status: po.status,
+      order_date: po.order_date,
+      expected_delivery: po.expected_delivery,
+      total_amount: po.total_amount || 0,
+      items_count: Array.isArray(po.purchase_order_items) && po.purchase_order_items[0]?.count != null
+        ? po.purchase_order_items[0].count
+        : undefined,
+    }))
+
+    return normalized
+  },
+}
+
+// Reports API
+export const reportsApi = {
+  async getReportData(dateRange: string) {
+    // Compute dateFrom/dateTo based on selected range (defaults to last 30 days)
+    const now = new Date()
+    let dateFrom = new Date(now)
+    switch (dateRange) {
+      case 'today': dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate()); break
+      case 'yesterday': dateFrom = new Date(now); dateFrom.setDate(now.getDate() - 1); break
+      case 'last_7_days': dateFrom = new Date(now); dateFrom.setDate(now.getDate() - 7); break
+      case 'last_30_days': dateFrom = new Date(now); dateFrom.setDate(now.getDate() - 30); break
+      case 'last_90_days': dateFrom = new Date(now); dateFrom.setDate(now.getDate() - 90); break
+      case 'this_month': dateFrom = new Date(now.getFullYear(), now.getMonth(), 1); break
+      case 'last_month': dateFrom = new Date(now.getFullYear(), now.getMonth() - 1, 1); break
+      case 'this_year': dateFrom = new Date(now.getFullYear(), 0, 1); break
+      default: dateFrom = new Date(now); dateFrom.setDate(now.getDate() - 30)
+    }
+    const dateTo = now
+
+    // Sales totals
+    const { data: salesTxns, error: salesErr } = await supabase
+      .from('transactions')
+      .select('id,total_amount,transaction_date,type')
+      .eq('type', 'sale')
+      .gte('transaction_date', dateFrom.toISOString())
+      .lte('transaction_date', dateTo.toISOString())
+
+    if (salesErr) throw salesErr
+
+    const totalSales = (salesTxns || []).reduce((sum, t: any) => sum + (t.total_amount || 0), 0)
+    const totalTransactions = (salesTxns || []).length
+    const averageTransaction = totalTransactions > 0 ? Math.round((totalSales / totalTransactions) * 100) / 100 : 0
+
+    // Top products from transaction_items joined to transactions and products
+    const { data: soldItems, error: itemsErr } = await supabase
+      .from('transaction_items')
+      .select(`
+        product_id, quantity, total_price,
+        products(name),
+        transactions!inner(transaction_date, type)
+      `)
+      .eq('transactions.type', 'sale')
+      .gte('transactions.transaction_date', dateFrom.toISOString())
+      .lte('transactions.transaction_date', dateTo.toISOString())
+
+    if (itemsErr) throw itemsErr
+
+    const productAgg: Record<string, { name: string; sales: number; quantity: number }> = {}
+    for (const row of soldItems || []) {
+      const pid = row.product_id
+      const name = Array.isArray((row as any).products) ? (row as any).products[0]?.name : (row as any).products?.name || 'Unknown'
+      if (!productAgg[pid]) {
+        productAgg[pid] = { name, sales: 0, quantity: 0 }
+      }
+      productAgg[pid].sales += row.total_price || 0
+      productAgg[pid].quantity += row.quantity || 0
+    }
+    const topProducts = Object.values(productAgg)
+      .sort((a, b) => b.sales - a.sales)
+      .slice(0, 10)
+
+    // Inventory report
+    const [productsCountRes, { data: invData, error: invErr }] = await Promise.all([
+      supabase.from('products').select('*', { count: 'exact', head: true }).eq('is_active', true),
+      supabase
+        .from('inventory')
+        .select('quantity_available, unit_cost, product_join:products(reorder_level, base_price)')
+    ])
+
+    if (invErr) throw invErr
+
+    const lowStockItems = (invData || []).filter((i: any) => i.product_join?.reorder_level != null && i.quantity_available > 0 && i.quantity_available <= i.product_join.reorder_level).length
+    const outOfStockItems = (invData || []).filter((i: any) => i.quantity_available === 0).length
+    const totalValue = (invData || []).reduce((sum: number, i: any) => sum + i.quantity_available * (i.unit_cost || i.product_join?.base_price || 0), 0)
+
+    return {
+      salesSummary: {
+        totalSales,
+        totalTransactions,
+        averageTransaction,
+        topProducts,
+      },
+      inventoryReport: {
+        totalProducts: productsCountRes.count || 0,
+        lowStockItems,
+        outOfStockItems,
+        totalValue,
+        topCategories: [],
+      },
+      supplierPerformance: [],
+      financialMetrics: {
+        revenue: totalSales,
+        costs: 0,
+        grossProfit: totalSales,
+        profitMargin: 0,
+        monthlyGrowth: 0,
+      },
+    }
   }
 }

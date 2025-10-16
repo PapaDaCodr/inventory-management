@@ -50,6 +50,8 @@ import { useAuth } from '@/contexts/AuthContext'
 import { productsApiCached } from '@/lib/supabase-api-cached'
 import { formatCurrency } from '@/lib/currency'
 import { startTiming, endTiming } from '@/lib/performance'
+import { purchaseOrdersApi } from '@/lib/supabase-api'
+
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -76,6 +78,7 @@ export default function SupplierDashboard() {
   const { profile } = useAuth()
   const [tabValue, setTabValue] = useState(0)
   const [products, setProducts] = useState<any[]>([])
+  const [purchaseOrders, setPurchaseOrders] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [productDialog, setProductDialog] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<any>(null)
@@ -89,36 +92,7 @@ export default function SupplierDashboard() {
     brand: '',
   })
 
-  // Mock data for purchase orders
-  const mockPurchaseOrders = [
-    {
-      id: '1',
-      po_number: 'PO-2024-001',
-      status: 'pending',
-      order_date: '2024-01-15',
-      expected_delivery: '2024-01-22',
-      total_amount: 2500.00,
-      items_count: 15,
-    },
-    {
-      id: '2',
-      po_number: 'PO-2024-002',
-      status: 'approved',
-      order_date: '2024-01-10',
-      expected_delivery: '2024-01-18',
-      total_amount: 1800.00,
-      items_count: 8,
-    },
-    {
-      id: '3',
-      po_number: 'PO-2024-003',
-      status: 'delivered',
-      order_date: '2024-01-05',
-      expected_delivery: '2024-01-12',
-      total_amount: 3200.00,
-      items_count: 22,
-    },
-  ]
+
 
   useEffect(() => {
     loadData()
@@ -133,6 +107,10 @@ export default function SupplierDashboard() {
       // Use cached API for better performance
       const productsData = await productsApiCached.getProducts({ is_active: true })
       setProducts(productsData || [])
+
+      // Load purchase orders from Supabase
+      const poData = await purchaseOrdersApi.getPurchaseOrders()
+      setPurchaseOrders(poData || [])
 
       endTiming('supplier-data-load')
       console.log('Supplier data loaded successfully')
@@ -174,7 +152,9 @@ export default function SupplierDashboard() {
         base_price: parseFloat(productForm.base_price) || 0,
         cost_price: parseFloat(productForm.cost_price) || 0,
         supplier_id: profile?.id, // Set current user as supplier
-        is_active: true
+        is_active: true,
+        reorder_level: 0,
+        is_perishable: false,
       }
 
       if (selectedProduct) {
@@ -187,7 +167,7 @@ export default function SupplierDashboard() {
           productData.sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
         }
 
-        await productsApi.createProduct(productData)
+        await productsApiCached.createProduct(productData)
       }
 
       await loadData()
@@ -248,7 +228,7 @@ export default function SupplierDashboard() {
                 <Box display="flex" alignItems="center" gap={2}>
                   <FileText className="text-blue-500" size={32} />
                   <Box>
-                    <Typography variant="h4">{mockPurchaseOrders.length}</Typography>
+                    <Typography variant="h4">{purchaseOrders.length}</Typography>
                     <Typography variant="body2" color="textSecondary">
                       Active Orders
                     </Typography>
@@ -279,7 +259,7 @@ export default function SupplierDashboard() {
                   <DollarSign className="text-purple-500" size={32} />
                   <Box>
                     <Typography variant="h4">
-                      {formatCurrency(mockPurchaseOrders.reduce((sum, po) => sum + po.total_amount, 0))}
+                      {formatCurrency(purchaseOrders.reduce((sum, po) => sum + (po.total_amount || 0), 0))}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       Total Order Value
@@ -296,7 +276,7 @@ export default function SupplierDashboard() {
                   <Truck className="text-orange-500" size={32} />
                   <Box>
                     <Typography variant="h4">
-                      {mockPurchaseOrders.filter(po => po.status === 'pending').length}
+                      {purchaseOrders.filter(po => po.status === 'pending').length}
                     </Typography>
                     <Typography variant="body2" color="textSecondary">
                       Pending Deliveries
@@ -324,7 +304,7 @@ export default function SupplierDashboard() {
             <Typography variant="h6" gutterBottom>
               Purchase Orders Management
             </Typography>
-            
+
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -339,7 +319,7 @@ export default function SupplierDashboard() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {mockPurchaseOrders.map((po) => (
+                  {purchaseOrders.map((po) => (
                     <TableRow key={po.id}>
                       <TableCell>
                         <Typography variant="body2" fontWeight="medium">
@@ -407,7 +387,7 @@ export default function SupplierDashboard() {
                 Add Product
               </Button>
             </Box>
-            
+
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -462,7 +442,7 @@ export default function SupplierDashboard() {
             <Typography variant="h6" gutterBottom>
               Delivery Schedule
             </Typography>
-            
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={6}>
                 <Card>
@@ -471,7 +451,7 @@ export default function SupplierDashboard() {
                       <Calendar className="inline mr-2" size={20} />
                       Upcoming Deliveries
                     </Typography>
-                    {mockPurchaseOrders
+                    {purchaseOrders
                       .filter(po => po.status !== 'delivered')
                       .map((po) => (
                         <Box key={po.id} sx={{ mb: 2, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
@@ -526,7 +506,7 @@ export default function SupplierDashboard() {
             <Typography variant="h6" gutterBottom>
               Supplier Performance Metrics
             </Typography>
-            
+
             <Grid container spacing={3}>
               <Grid item xs={12} md={4}>
                 <Card>
@@ -583,13 +563,13 @@ export default function SupplierDashboard() {
                 </Typography>
                 <Alert severity="success" sx={{ mb: 2 }}>
                   <Typography variant="body2">
-                    <strong>January 2024:</strong> Excellent delivery performance and product quality. 
+                    <strong>January 2024:</strong> Excellent delivery performance and product quality.
                     All orders delivered on time with no quality issues reported.
                   </Typography>
                 </Alert>
                 <Alert severity="info">
                   <Typography variant="body2">
-                    <strong>Improvement Suggestion:</strong> Consider implementing real-time delivery 
+                    <strong>Improvement Suggestion:</strong> Consider implementing real-time delivery
                     tracking to further enhance customer experience.
                   </Typography>
                 </Alert>

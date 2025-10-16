@@ -5,14 +5,8 @@
 
 import { supabase } from './supabase'
 import { cachedApiClient, CacheKeys } from './cache'
-import type { 
-  DashboardMetrics, 
-  User, 
-  Product, 
-  Inventory, 
-  Supplier, 
-  Category 
-} from '@/types/global'
+import type { DashboardMetrics, Product, Inventory, Supplier, Category } from '@/lib/supabase-api'
+import type { UserProfile as User } from '@/contexts/AuthContext'
 
 // Cache TTL configurations (in milliseconds)
 const CACHE_TTL = {
@@ -67,10 +61,10 @@ export const dashboardApiCached = {
         ])
 
         // Calculate metrics efficiently
-        const lowStockItems = lowStockData?.filter(item => 
-          item.product?.reorder_level && 
-          item.quantity_available <= item.product.reorder_level
-        ).length || 0
+        const lowStockItems = lowStockData?.filter((item: any) => {
+          const rl = Array.isArray(item.product_join) ? item.product_join[0]?.reorder_level : item.product_join?.reorder_level
+          return rl != null && item.quantity_available > 0 && item.quantity_available <= rl
+        }).length || 0
 
         const totalInventoryValue = inventoryData?.reduce((total, item) => {
           return total + (item.quantity_available * (item.unit_cost || 0))
@@ -172,7 +166,7 @@ export const productsApiCached = {
     search?: string
   }, forceRefresh = false): Promise<Product[]> {
     const cacheKey = CacheKeys.PRODUCTS(JSON.stringify(filters))
-    
+
     return cachedApiClient.fetchWithCache(
       cacheKey,
       async () => {
@@ -206,6 +200,24 @@ export const productsApiCached = {
       },
       { ttl: CACHE_TTL.PRODUCTS, forceRefresh }
     )
+  },
+
+  async updateProduct(id: string, updates: Partial<Product>): Promise<Product> {
+    // Use non-cached API for mutations
+    const { productsApi } = await import('./supabase-api')
+    const updated = await productsApi.updateProduct(id, updates as any)
+
+    // Invalidate all product caches after mutation
+    cachedApiClient.invalidateCache('products:*')
+
+    return updated as Product
+  },
+
+  async createProduct(product: Omit<Product, 'id' | 'created_at' | 'updated_at'>): Promise<Product> {
+    const { productsApi } = await import('./supabase-api')
+    const created = await productsApi.createProduct(product as any)
+    cachedApiClient.invalidateCache('products:*')
+    return created as Product
   }
 }
 
@@ -228,7 +240,7 @@ export const inventoryApiCached = {
           .from('inventory')
           .select(`
             *,
-            product_join:products(name, sku, reorder_level),
+            product_join:products(name, sku, reorder_level, base_price),
             location_join:locations(name)
           `)
           .order('updated_at', { ascending: false })

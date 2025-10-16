@@ -31,7 +31,7 @@ class LocalCache {
    */
   get<T>(key: string): T | null {
     const item = this.cache.get(key)
-    
+
     if (!item) {
       return null
     }
@@ -56,7 +56,7 @@ class LocalCache {
       timestamp: Date.now(),
       ttl: ttl || this.DEFAULT_TTL
     }
-    
+
     this.cache.set(key, item)
   }
 
@@ -122,6 +122,8 @@ class LocalCache {
  */
 export class CachedApiClient {
   private cache = LocalCache.getInstance()
+  private readonly DEFAULT_TTL = 5 * 60 * 1000 // 5 minutes
+
 
   /**
    * Fetch data with cache-first strategy
@@ -147,10 +149,10 @@ export class CachedApiClient {
     try {
       // Fetch from network
       const data = await fetchFn()
-      
+
       // Store in cache
       this.cache.set(key, data, ttl)
-      
+
       return data
     } catch (error) {
       // If network fails, try to return stale cache data
@@ -159,7 +161,7 @@ export class CachedApiClient {
         console.warn(`Network failed for key: ${key}, returning stale cache data`)
         return staleData
       }
-      
+
       // No cache data available, re-throw error
       throw error
     }
@@ -173,13 +175,13 @@ export class CachedApiClient {
       // Pattern matching - remove all keys that match
       const pattern = keyOrPattern.replace('*', '')
       const keysToDelete: string[] = []
-      
+
       this.cache['cache'].forEach((_, key) => {
         if (key.includes(pattern)) {
           keysToDelete.push(key)
         }
       })
-      
+
       keysToDelete.forEach(key => this.cache.delete(key))
     } else {
       // Exact key match
