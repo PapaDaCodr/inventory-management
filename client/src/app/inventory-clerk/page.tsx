@@ -249,7 +249,7 @@ export default function InventoryClerkDashboard() {
                 <Box display="flex" alignItems="center" gap={2}>
                   <MapPin className="text-purple-500" size={32} />
                   <Box>
-                    <Typography variant="h4">4</Typography>
+                    <Typography variant="h4">{new Set(inventory.map(i => i.location?.name || 'Main')).size}</Typography>
                     <Typography variant="body2" color="text.secondary">
                       Storage Locations
                     </Typography>
