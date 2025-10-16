@@ -6,3 +6,4 @@ client/.env/
 server/.env/
 client/.next/
 .qodo
+.supabase-sample-auth-users.sql
