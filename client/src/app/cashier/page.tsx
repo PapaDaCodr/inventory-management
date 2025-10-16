@@ -45,7 +45,7 @@ import {
 } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
-import { productsApi } from '@/lib/supabase-api'
+import { productsApi, transactionsApi, customersApi } from '@/lib/supabase-api'
 import { formatCurrency } from '@/lib/currency'
 
 interface CartItem {
@@ -68,9 +68,17 @@ export default function CashierDashboard() {
   const [paymentMethod, setPaymentMethod] = useState('cash')
   const [amountReceived, setAmountReceived] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
+  const [customers, setCustomers] = useState<any[]>([])
+  const [customerForm, setCustomerForm] = useState({
+    name: '',
+    phone: '',
+    email: ''
+  })
+  const [processingPayment, setProcessingPayment] = useState(false)
 
   useEffect(() => {
     loadProducts()
+    loadCustomers()
   }, [])
 
   const loadProducts = async () => {
@@ -82,6 +90,15 @@ export default function CashierDashboard() {
       console.error('Error loading products:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadCustomers = async () => {
+    try {
+      const customersData = await customersApi.getCustomers()
+      setCustomers(customersData || [])
+    } catch (error) {
+      console.error('Error loading customers:', error)
     }
   }
 
@@ -136,12 +153,70 @@ export default function CashierDashboard() {
     }
   }
 
-  const handlePayment = () => {
-    // Simulate payment processing
-    alert('Payment processed successfully!')
-    clearCart()
-    setPaymentDialog(false)
-    setAmountReceived('')
+  const handlePayment = async () => {
+    if (!profile?.id) {
+      alert('Error: Cashier profile not found')
+      return
+    }
+
+    if (cart.length === 0) {
+      alert('Cart is empty')
+      return
+    }
+
+    if (paymentMethod === 'cash' && parseFloat(amountReceived) < total) {
+      alert('Insufficient amount received')
+      return
+    }
+
+    try {
+      setProcessingPayment(true)
+
+      // Prepare transaction data
+      const transactionData = {
+        customer_id: customer?.id || null,
+        cashier_id: profile.id,
+        items: cart.map(item => ({
+          product_id: item.id,
+          quantity: item.quantity,
+          unit_price: item.price,
+          total_price: item.total
+        })),
+        subtotal: subtotal,
+        tax_amount: tax,
+        discount_amount: 0,
+        total_amount: total,
+        payment_method: paymentMethod,
+        payment_reference: paymentMethod === 'cash' ? `Cash-${amountReceived}` : undefined,
+        notes: customer ? `Customer: ${customer.name}` : 'Walk-in customer'
+      }
+
+      // Process the transaction
+      const transaction = await transactionsApi.createTransaction(transactionData)
+
+      // Show success message with transaction details
+      const receiptInfo = `
+Transaction: ${transaction.transaction_number}
+Total: ${formatCurrency(total)}
+Payment: ${paymentMethod.toUpperCase()}
+${paymentMethod === 'cash' ? `Received: ${formatCurrency(parseFloat(amountReceived))}\nChange: ${formatCurrency(change)}` : ''}
+Date: ${new Date().toLocaleString()}
+      `.trim()
+
+      alert(`Payment processed successfully!\n\n${receiptInfo}`)
+
+      // Clear the cart and close dialogs
+      clearCart()
+      setPaymentDialog(false)
+      setAmountReceived('')
+      setPaymentMethod('cash')
+
+    } catch (error) {
+      console.error('Error processing payment:', error)
+      alert('Error processing payment. Please try again.')
+    } finally {
+      setProcessingPayment(false)
+    }
   }
 
   const subtotal = cart.reduce((sum, item) => sum + item.total, 0)
@@ -435,34 +510,70 @@ export default function CashierDashboard() {
         <Dialog open={customerDialog} onClose={() => setCustomerDialog(false)} maxWidth="sm" fullWidth>
           <DialogTitle>Customer Information</DialogTitle>
           <DialogContent>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Customer management will be integrated with the customers table.
-            </Alert>
-            <TextField
-              fullWidth
-              label="Customer Name"
-              sx={{ mb: 2 }}
-              placeholder="Enter customer name or phone number"
-            />
-            <TextField
-              fullWidth
-              label="Phone Number"
-              sx={{ mb: 2 }}
-            />
-            <TextField
-              fullWidth
-              label="Email"
-              type="email"
-            />
+            <Box sx={{ pt: 2 }}>
+              <TextField
+                fullWidth
+                label="Customer Name"
+                value={customerForm.name}
+                onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })}
+                sx={{ mb: 2 }}
+                placeholder="Enter customer name"
+                required
+              />
+              <TextField
+                fullWidth
+                label="Phone Number"
+                value={customerForm.phone}
+                onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })}
+                sx={{ mb: 2 }}
+                placeholder="Enter phone number"
+              />
+              <TextField
+                fullWidth
+                label="Email"
+                type="email"
+                value={customerForm.email}
+                onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })}
+                placeholder="Enter email address"
+              />
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setCustomerDialog(false)}>Cancel</Button>
-            <Button 
-              variant="contained"
+            <Button
+              variant="outlined"
               onClick={() => {
                 setCustomer({ name: 'Walk-in Customer' })
                 setCustomerDialog(false)
               }}
+            >
+              Walk-in Customer
+            </Button>
+            <Button
+              variant="contained"
+              onClick={async () => {
+                if (!customerForm.name.trim()) {
+                  alert('Please enter customer name')
+                  return
+                }
+
+                try {
+                  const newCustomer = await customersApi.createCustomer({
+                    name: customerForm.name.trim(),
+                    phone: customerForm.phone.trim() || undefined,
+                    email: customerForm.email.trim() || undefined
+                  })
+
+                  setCustomer(newCustomer)
+                  setCustomerDialog(false)
+                  setCustomerForm({ name: '', phone: '', email: '' })
+                  await loadCustomers() // Refresh customer list
+                } catch (error) {
+                  console.error('Error creating customer:', error)
+                  alert('Error saving customer. Please try again.')
+                }
+              }}
+              disabled={!customerForm.name.trim()}
             >
               Save Customer
             </Button>
@@ -523,13 +634,16 @@ export default function CashierDashboard() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setPaymentDialog(false)}>Cancel</Button>
-            <Button 
+            <Button
               variant="contained"
               onClick={handlePayment}
-              disabled={paymentMethod === 'cash' && parseFloat(amountReceived) < total}
-              startIcon={<Receipt />}
+              disabled={
+                processingPayment ||
+                (paymentMethod === 'cash' && parseFloat(amountReceived) < total)
+              }
+              startIcon={processingPayment ? <CircularProgress size={20} /> : <Receipt />}
             >
-              Complete Sale
+              {processingPayment ? 'Processing...' : 'Complete Sale'}
             </Button>
           </DialogActions>
         </Dialog>

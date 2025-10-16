@@ -82,6 +82,7 @@ export default function SupplierDashboard() {
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
+    sku: '',
     base_price: '',
     cost_price: '',
     unit_of_measure: '',
@@ -152,6 +153,7 @@ export default function SupplierDashboard() {
     setProductForm({
       name: product.name || '',
       description: product.description || '',
+      sku: product.sku || '',
       base_price: product.base_price?.toString() || '',
       cost_price: product.cost_price?.toString() || '',
       unit_of_measure: product.unit_of_measure || '',
@@ -162,19 +164,47 @@ export default function SupplierDashboard() {
 
   const handleSaveProduct = async () => {
     try {
-      if (selectedProduct) {
-        const updates = {
-          ...productForm,
-          base_price: parseFloat(productForm.base_price) || 0,
-          cost_price: parseFloat(productForm.cost_price) || 0,
-        }
-        await productsApiCached.updateProduct(selectedProduct.id, updates)
-        await loadData()
-        setProductDialog(false)
-        setSelectedProduct(null)
+      if (!productForm.name.trim()) {
+        alert('Please enter product name')
+        return
       }
+
+      const productData = {
+        ...productForm,
+        base_price: parseFloat(productForm.base_price) || 0,
+        cost_price: parseFloat(productForm.cost_price) || 0,
+        supplier_id: profile?.id, // Set current user as supplier
+        is_active: true
+      }
+
+      if (selectedProduct) {
+        // Update existing product
+        await productsApiCached.updateProduct(selectedProduct.id, productData)
+      } else {
+        // Create new product
+        // Generate SKU if not provided
+        if (!productData.sku) {
+          productData.sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`
+        }
+
+        await productsApi.createProduct(productData)
+      }
+
+      await loadData()
+      setProductDialog(false)
+      setSelectedProduct(null)
+      setProductForm({
+        name: '',
+        description: '',
+        sku: '',
+        base_price: '',
+        cost_price: '',
+        unit_of_measure: '',
+        brand: '',
+      })
     } catch (error) {
-      console.error('Error updating product:', error)
+      console.error('Error saving product:', error)
+      alert('Error saving product. Please try again.')
     }
   }
 
@@ -365,6 +395,7 @@ export default function SupplierDashboard() {
                   setProductForm({
                     name: '',
                     description: '',
+                    sku: '',
                     base_price: '',
                     cost_price: '',
                     unit_of_measure: '',
@@ -589,6 +620,15 @@ export default function SupplierDashboard() {
                 value={productForm.description}
                 onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
                 sx={{ mb: 2 }}
+              />
+              <TextField
+                fullWidth
+                label="SKU"
+                value={productForm.sku}
+                onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })}
+                sx={{ mb: 2 }}
+                placeholder="Leave empty to auto-generate"
+                helperText="Stock Keeping Unit - unique identifier for the product"
               />
               <TextField
                 fullWidth

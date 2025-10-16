@@ -152,13 +152,32 @@ export default function AdminDashboard() {
   const handleSaveUser = async () => {
     try {
       if (selectedUser) {
+        // Update existing user
         await usersApiCached.updateUser(selectedUser.id, userForm)
-        await loadData(true) // Force refresh after update
-        setUserDialog(false)
-        setSelectedUser(null)
+      } else {
+        // Create new user
+        if (!userForm.email || !userForm.full_name) {
+          alert('Please fill in all required fields (Name and Email)')
+          return
+        }
+
+        // Generate a temporary password for new users
+        const tempPassword = `Temp${Math.random().toString(36).substr(2, 8)}!`
+
+        await usersApiCached.createUser({
+          ...userForm,
+          password: tempPassword
+        })
+
+        alert(`User created successfully! Temporary password: ${tempPassword}\nPlease ask the user to change their password on first login.`)
       }
+
+      await loadData(true) // Force refresh after update/create
+      setUserDialog(false)
+      setSelectedUser(null)
     } catch (error) {
-      console.error('Error updating user:', error)
+      console.error('Error saving user:', error)
+      alert('Error saving user. Please check the console for details.')
     }
   }
 

@@ -327,9 +327,243 @@ export const usersApi = {
     return data
   },
 
+  async createUser(userData: {
+    email: string
+    password: string
+    full_name: string
+    role: string
+    employee_id?: string
+    contact_phone?: string
+    department?: string
+  }) {
+    // First create the auth user
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email: userData.email,
+      password: userData.password,
+      email_confirm: true
+    })
+
+    if (authError) throw authError
+
+    // Then create the profile
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        email: userData.email,
+        full_name: userData.full_name,
+        role: userData.role,
+        employee_id: userData.employee_id,
+        contact_phone: userData.contact_phone,
+        department: userData.department,
+        is_active: true
+      })
+      .select()
+      .single()
+
+    if (profileError) throw profileError
+    return profileData
+  },
+
   async updateUser(id: string, updates: any) {
     const { data, error } = await supabase
       .from('profiles')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async deleteUser(id: string) {
+    // First deactivate the profile
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ is_active: false })
+      .eq('id', id)
+
+    if (profileError) throw profileError
+
+    // Note: We don't delete the auth user, just deactivate the profile
+    // This preserves data integrity and audit trails
+  }
+}
+
+// Transactions API
+export const transactionsApi = {
+  async createTransaction(transactionData: {
+    customer_id?: string
+    cashier_id: string
+    items: Array<{
+      product_id: string
+      quantity: number
+      unit_price: number
+      total_price: number
+    }>
+    subtotal: number
+    tax_amount: number
+    discount_amount?: number
+    total_amount: number
+    payment_method: string
+    payment_reference?: string
+    notes?: string
+  }) {
+    // Generate transaction number
+    const transactionNumber = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+
+    // Create the main transaction
+    const { data: transaction, error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        transaction_number: transactionNumber,
+        type: 'sale',
+        customer_id: transactionData.customer_id,
+        cashier_id: transactionData.cashier_id,
+        subtotal: transactionData.subtotal,
+        tax_amount: transactionData.tax_amount,
+        discount_amount: transactionData.discount_amount || 0,
+        total_amount: transactionData.total_amount,
+        payment_method: transactionData.payment_method,
+        payment_reference: transactionData.payment_reference,
+        notes: transactionData.notes
+      })
+      .select()
+      .single()
+
+    if (transactionError) throw transactionError
+
+    // Create transaction items
+    const transactionItems = transactionData.items.map(item => ({
+      transaction_id: transaction.id,
+      product_id: item.product_id,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total_price: item.total_price
+    }))
+
+    const { error: itemsError } = await supabase
+      .from('transaction_items')
+      .insert(transactionItems)
+
+    if (itemsError) throw itemsError
+
+    // Update inventory levels
+    for (const item of transactionData.items) {
+      // Get current inventory
+      const { data: inventory, error: inventoryError } = await supabase
+        .from('inventory')
+        .select('quantity_available')
+        .eq('product_id', item.product_id)
+        .single()
+
+      if (inventoryError) {
+        console.warn(`Could not find inventory for product ${item.product_id}`)
+        continue
+      }
+
+      // Update inventory
+      const newQuantity = Math.max(0, inventory.quantity_available - item.quantity)
+      await supabase
+        .from('inventory')
+        .update({
+          quantity_available: newQuantity,
+          quantity_on_hand: newQuantity,
+          last_updated: new Date().toISOString()
+        })
+        .eq('product_id', item.product_id)
+
+      // Create stock movement record
+      await supabase
+        .from('stock_movements')
+        .insert({
+          product_id: item.product_id,
+          movement_type: 'out',
+          quantity: -item.quantity, // Negative for outgoing
+          reference_type: 'transaction',
+          reference_id: transaction.id,
+          notes: `Sale - Transaction ${transactionNumber}`,
+          created_by: transactionData.cashier_id
+        })
+    }
+
+    return transaction
+  },
+
+  async getTransactions(filters?: {
+    cashier_id?: string
+    date_from?: string
+    date_to?: string
+    limit?: number
+  }) {
+    let query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        cashier:profiles!cashier_id(full_name),
+        customer:customers(name, phone),
+        transaction_items(
+          *,
+          product:products(name, sku)
+        )
+      `)
+      .order('transaction_date', { ascending: false })
+
+    if (filters?.cashier_id) {
+      query = query.eq('cashier_id', filters.cashier_id)
+    }
+    if (filters?.date_from) {
+      query = query.gte('transaction_date', filters.date_from)
+    }
+    if (filters?.date_to) {
+      query = query.lte('transaction_date', filters.date_to)
+    }
+    if (filters?.limit) {
+      query = query.limit(filters.limit)
+    }
+
+    const { data, error } = await query
+    if (error) throw error
+    return data
+  }
+}
+
+// Customers API
+export const customersApi = {
+  async getCustomers() {
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('is_active', true)
+      .order('name')
+
+    if (error) throw error
+    return data
+  },
+
+  async createCustomer(customerData: {
+    name: string
+    phone?: string
+    email?: string
+    address?: string
+  }) {
+    const { data, error } = await supabase
+      .from('customers')
+      .insert({
+        ...customerData,
+        is_active: true
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
+  async updateCustomer(id: string, updates: any) {
+    const { data, error } = await supabase
+      .from('customers')
       .update(updates)
       .eq('id', id)
       .select()

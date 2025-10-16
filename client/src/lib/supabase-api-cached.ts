@@ -125,6 +125,25 @@ export const usersApiCached = {
     )
   },
 
+  async createUser(userData: {
+    email: string
+    password: string
+    full_name: string
+    role: string
+    employee_id?: string
+    contact_phone?: string
+    department?: string
+  }): Promise<User> {
+    // Use the non-cached API for creation
+    const { usersApi } = await import('./supabase-api')
+    const newUser = await usersApi.createUser(userData)
+
+    // Invalidate users cache after creation
+    cachedApiClient.invalidateCache(CacheKeys.USERS)
+
+    return newUser as User
+  },
+
   async updateUser(userId: string, updates: Partial<User>): Promise<User> {
     const { data, error } = await supabase
       .from('profiles')
@@ -137,7 +156,7 @@ export const usersApiCached = {
 
     // Invalidate users cache after update
     cachedApiClient.invalidateCache(CacheKeys.USERS)
-    
+
     return data as User
   }
 }
