@@ -58,9 +58,9 @@ export const dashboardApiCached = {
             .from('inventory')
             .select(`
               quantity_available,
-              product:products!inner(reorder_level)
+              product_join:products!inner(reorder_level)
             `)
-            .not('product.reorder_level', 'is', null),
+            .not('product_join.reorder_level', 'is', null),
           supabase
             .from('inventory')
             .select('quantity_available, unit_cost')
@@ -228,8 +228,8 @@ export const inventoryApiCached = {
           .from('inventory')
           .select(`
             *,
-            product:products(name, sku, reorder_level),
-            location:locations(name)
+            product_join:products(name, sku, reorder_level),
+            location_join:locations(name)
           `)
           .order('updated_at', { ascending: false })
 
@@ -244,7 +244,13 @@ export const inventoryApiCached = {
         const { data, error } = await query
         if (error) throw error
 
-        let inventory = data as Inventory[]
+        const mapped = (data || []).map((row: any) => ({
+          ...row,
+          product: row.product_join,
+          location: row.location_join,
+        })) as Inventory[]
+
+        let inventory = mapped as Inventory[]
 
         // Filter for low stock if requested
         if (filters?.low_stock) {

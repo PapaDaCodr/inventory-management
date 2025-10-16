@@ -231,8 +231,8 @@ export const inventoryApi = {
       .from('inventory')
       .select(`
         *,
-        product:products(name, sku, reorder_level),
-        location:locations(name)
+        product_join:products(name, sku, reorder_level),
+        location_join:locations(name)
       `)
       .order('updated_at', { ascending: false })
 
@@ -246,7 +246,14 @@ export const inventoryApi = {
     const { data, error } = await query
     if (error) throw error
 
-    let inventory = data as Inventory[]
+    // Map join aliases to expected property names to avoid name collisions
+    const mapped = (data || []).map((row: any) => ({
+      ...row,
+      product: row.product_join,
+      location: row.location_join,
+    })) as Inventory[]
+
+    let inventory = mapped as Inventory[]
 
     // Filter for low stock if requested
     if (filters?.low_stock) {
@@ -288,15 +295,15 @@ export const dashboardApi = {
       supabase.from('suppliers').select('*', { count: 'exact', head: true }).eq('is_active', true),
       supabase.from('inventory').select(`
         quantity_available,
-        product:products(reorder_level)
+        product_join:products(reorder_level)
       `),
       supabase.from('inventory').select('quantity_available, unit_cost')
     ])
 
     // Calculate low stock items
-    const lowStockItems = lowStockData?.filter(item => 
-      item.product?.reorder_level && 
-      item.quantity_available <= item.product.reorder_level
+    const lowStockItems = lowStockData?.filter((item: any) =>
+      item.product_join?.reorder_level &&
+      item.quantity_available <= item.product_join.reorder_level
     ).length || 0
 
     // Calculate total inventory value
@@ -411,7 +418,7 @@ export const transactionsApi = {
     notes?: string
   }) {
     // Generate transaction number
-    const transactionNumber = `TXN-${Date.now()}-${Math.random().toString(36).substr(2, 9).toUpperCase()}`
+    const transactionNumber = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 11).toUpperCase()}`
 
     // Create the main transaction
     const { data: transaction, error: transactionError } = await supabase

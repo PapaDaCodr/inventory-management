@@ -1,26 +1,4 @@
--- Sample Authentication Users for SIMS (Supermarket Inventory Management System)
--- This script creates sample users in Supabase auth.users and corresponding profiles
--- Run this in Supabase SQL Editor after running the main schema and sample data
 
--- Note: In Supabase, you typically can't directly insert into auth.users via SQL
--- This script provides the user data that should be created through the Supabase Dashboard
--- or through the application signup process
-
--- However, we can prepare the profiles data to be inserted after users are created
-
--- First, let's create a temporary function to help with user creation
--- This is a reference for the user IDs that will be generated when you create users
-
--- INSTRUCTIONS FOR CREATING USERS:
--- 1. Go to Supabase Dashboard > Authentication > Users
--- 2. Click "Add User" for each user below
--- 3. Use the email and password provided
--- 4. After creating each user, note their UUID and update the profile inserts below
--- 5. Then run the profile INSERT statements
-
--- ============================================================================
--- SAMPLE USERS TO CREATE IN SUPABASE DASHBOARD
--- ============================================================================
 
 /*
 USER 1 - ADMINISTRATOR

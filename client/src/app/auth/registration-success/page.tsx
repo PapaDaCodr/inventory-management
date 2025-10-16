@@ -8,7 +8,6 @@ import {
   Button,
   Typography,
   Container,
-  CheckCircleIcon,
 } from '@mui/material'
 import { CheckCircle } from 'lucide-react'
 

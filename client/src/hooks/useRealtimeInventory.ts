@@ -2,21 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { inventoryApi } from '@/lib/supabase-api'
+import { inventoryApi, type Inventory } from '@/lib/supabase-api'
 import { useRealtime } from '@/contexts/RealtimeContext'
 
-interface InventoryItem {
-  id: string
-  product_id: string
-  location_id: string
-  quantity_available: number
-  quantity_reserved: number
-  reorder_level: number
-  max_stock_level: number
-  last_updated: string
-  product?: any
-  location?: any
-}
 
 interface UseRealtimeInventoryOptions {
   autoRefresh?: boolean
@@ -30,7 +18,7 @@ interface UseRealtimeInventoryOptions {
 export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) {
   const { autoRefresh = true, filters = {} } = options
   const { inventoryUpdates } = useRealtime()
-  const [inventory, setInventory] = useState<InventoryItem[]>([])
+  const [inventory, setInventory] = useState<Inventory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -53,7 +41,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
   }, [filters])
 
   // Update specific inventory item
-  const updateInventoryItem = useCallback((updatedItem: Partial<InventoryItem> & { id: string }) => {
+  const updateInventoryItem = useCallback((updatedItem: Partial<Inventory> & { id: string }) => {
     setInventory(prev => 
       prev.map(item => 
         item.id === updatedItem.id 
@@ -65,7 +53,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
   }, [])
 
   // Add new inventory item
-  const addInventoryItem = useCallback((newItem: InventoryItem) => {
+  const addInventoryItem = useCallback((newItem: Inventory) => {
     setInventory(prev => [newItem, ...prev])
     setLastUpdated(new Date())
   }, [])
@@ -88,7 +76,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
         const newItem = latestUpdate.new
         const matchesFilters = 
           (!filters.location_id || newItem.location_id === filters.location_id) &&
-          (!filters.low_stock_only || newItem.quantity_available <= newItem.reorder_level) &&
+          (!filters.low_stock_only || (newItem.product?.reorder_level !== undefined && newItem.quantity_available <= newItem.product.reorder_level)) &&
           (!filters.out_of_stock_only || newItem.quantity_available === 0)
         
         if (matchesFilters) {
@@ -100,7 +88,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
         const updatedItem = latestUpdate.new
         const matchesFiltersAfterUpdate = 
           (!filters.location_id || updatedItem.location_id === filters.location_id) &&
-          (!filters.low_stock_only || updatedItem.quantity_available <= updatedItem.reorder_level) &&
+          (!filters.low_stock_only || (updatedItem.product?.reorder_level !== undefined && updatedItem.quantity_available <= updatedItem.product.reorder_level)) &&
           (!filters.out_of_stock_only || updatedItem.quantity_available === 0)
         
         if (matchesFiltersAfterUpdate) {
@@ -126,7 +114,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
   const getInventoryStats = useCallback(() => {
     const totalItems = inventory.length
     const lowStockItems = inventory.filter(item => 
-      item.quantity_available <= item.reorder_level && item.quantity_available > 0
+      (item.product?.reorder_level !== undefined && item.quantity_available <= item.product.reorder_level && item.quantity_available > 0)
     ).length
     const outOfStockItems = inventory.filter(item => 
       item.quantity_available === 0
@@ -148,7 +136,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
   // Get items that need reordering
   const getReorderItems = useCallback(() => {
     return inventory.filter(item => 
-      item.quantity_available <= item.reorder_level
+      (item.product?.reorder_level !== undefined && item.quantity_available <= item.product.reorder_level)
     ).sort((a, b) => a.quantity_available - b.quantity_available)
   }, [inventory])
 

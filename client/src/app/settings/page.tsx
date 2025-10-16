@@ -89,7 +89,7 @@ const Settings = () => {
     // Profile settings
     fullName: profile?.full_name || '',
     email: profile?.email || '',
-    phone: profile?.phone || '',
+    phone: profile?.contact_phone || '',
 
     // System preferences
     language: 'English',

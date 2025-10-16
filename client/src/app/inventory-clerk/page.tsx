@@ -30,25 +30,24 @@ import {
   Alert,
   CircularProgress,
   IconButton,
+  InputAdornment,
 } from '@mui/material'
 import {
   Package,
   MapPin,
   Scan,
-  Plus,
-  Minus,
   Edit,
   Search,
   AlertTriangle,
   CheckCircle,
   Clock,
-  BarChart3,
 } from 'lucide-react'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import { useAuth } from '@/contexts/AuthContext'
-import { inventoryApiCached, productsApiCached } from '@/lib/supabase-api-cached'
-import { startTiming, endTiming } from '@/lib/performance'
+import { inventoryApi } from '@/lib/supabase-api'
+
 import { useRealtime } from '@/contexts/RealtimeContext'
+import { useRealtimeInventory } from '@/hooks/useRealtimeInventory'
 
 interface TabPanelProps {
   children?: React.ReactNode
@@ -76,7 +75,7 @@ export default function InventoryClerkDashboard() {
   const { isConnected } = useRealtime()
   const { inventory, loading, stats, reorderItems, lastUpdated, refresh } = useRealtimeInventory()
   const [tabValue, setTabValue] = useState(0)
-  const [products, setProducts] = useState<any[]>([])
+
   const [adjustmentDialog, setAdjustmentDialog] = useState(false)
   const [selectedItem, setSelectedItem] = useState<any>(null)
   const [adjustmentForm, setAdjustmentForm] = useState({
@@ -87,25 +86,9 @@ export default function InventoryClerkDashboard() {
   const [searchTerm, setSearchTerm] = useState('')
   const [barcodeInput, setBarcodeInput] = useState('')
 
-  useEffect(() => {
-    loadData()
-  }, [])
 
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      const [inventoryData, productsData] = await Promise.all([
-        inventoryApi.getInventory(),
-        productsApi.getProducts({ is_active: true }),
-      ])
-      setInventory(inventoryData || [])
-      setProducts(productsData || [])
-    } catch (error) {
-      console.error('Error loading inventory data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+
+
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue)
@@ -129,7 +112,7 @@ export default function InventoryClerkDashboard() {
           quantity_available: Math.max(0, newQuantity),
           quantity_on_hand: Math.max(0, newQuantity),
         })
-        await loadData()
+        await refresh()
         setAdjustmentDialog(false)
         setSelectedItem(null)
       }
@@ -141,7 +124,7 @@ export default function InventoryClerkDashboard() {
   const getStockStatus = (item: any) => {
     const { quantity_available, product } = item
     const reorderLevel = product?.reorder_level || 0
-    
+
     if (quantity_available === 0) {
       return { status: 'Out of Stock', color: 'error', icon: <AlertTriangle size={16} /> }
     } else if (quantity_available <= reorderLevel) {
@@ -157,31 +140,37 @@ export default function InventoryClerkDashboard() {
     item.product?.barcode?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const lowStockItems = inventory.filter(item => 
-    item.product?.reorder_level && 
+  const lowStockItems = inventory.filter(item =>
+    item.product?.reorder_level &&
     item.quantity_available <= item.product.reorder_level
   )
 
   if (loading) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
-        <CircularProgress />
-      </Box>
+      <ProtectedRoute requiredRoles={['administrator', 'manager', 'inventory_clerk']}>
+        <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
+          <CircularProgress />
+        </Box>
+      </ProtectedRoute>
     )
   }
+
+
 
   return (
     <ProtectedRoute requiredRoles={['administrator', 'manager', 'inventory_clerk']}>
       <Box sx={{ width: '100%' }}>
-        <Box display="flex" justifyContent="between" alignItems="center" mb={2}>
+
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
           <Box>
             <Typography variant="h4" component="h1" gutterBottom>
               Inventory Management
             </Typography>
-            <Typography variant="body1" color="textSecondary">
+            <Typography variant="body1" color="text.secondary">
               Welcome back, {profile?.full_name}! Manage stock levels and track inventory movements.
             </Typography>
           </Box>
+
           <Box display="flex" alignItems="center" gap={2}>
             <Chip
               size="small"
@@ -191,7 +180,7 @@ export default function InventoryClerkDashboard() {
               icon={isConnected ? <CheckCircle size={16} /> : <Clock size={16} />}
             />
             {lastUpdated && (
-              <Typography variant="caption" color="textSecondary">
+              <Typography variant="caption" color="text.secondary">
                 Last updated: {lastUpdated.toLocaleTimeString()}
               </Typography>
             )}
@@ -216,7 +205,7 @@ export default function InventoryClerkDashboard() {
                   <Package className="text-blue-500" size={32} />
                   <Box>
                     <Typography variant="h4">{stats.totalItems}</Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       Total Items
                     </Typography>
                   </Box>
@@ -231,7 +220,7 @@ export default function InventoryClerkDashboard() {
                   <AlertTriangle className="text-orange-500" size={32} />
                   <Box>
                     <Typography variant="h4">{stats.lowStockItems}</Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       Low Stock Items
                     </Typography>
                   </Box>
@@ -246,7 +235,7 @@ export default function InventoryClerkDashboard() {
                   <CheckCircle className="text-green-500" size={32} />
                   <Box>
                     <Typography variant="h4">{stats.inStockItems}</Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       In Stock Items
                     </Typography>
                   </Box>
@@ -261,7 +250,7 @@ export default function InventoryClerkDashboard() {
                   <MapPin className="text-purple-500" size={32} />
                   <Box>
                     <Typography variant="h4">4</Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       Storage Locations
                     </Typography>
                   </Box>
@@ -310,7 +299,7 @@ export default function InventoryClerkDashboard() {
 
           {/* Current Inventory Tab */}
           <TabPanel value={tabValue} index={0}>
-            <Box display="flex" justifyContent="between" alignItems="center" mb={2}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
               <Typography variant="h6">Current Inventory</Typography>
               <TextField
                 size="small"
@@ -318,11 +307,15 @@ export default function InventoryClerkDashboard() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
-                  startAdornment: <Search size={20} className="mr-2 text-gray-400" />,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Search size={20} className="mr-2 text-gray-400" />
+                    </InputAdornment>
+                  ),
                 }}
               />
             </Box>
-            
+
             <TableContainer component={Paper}>
               <Table>
                 <TableHead>
@@ -347,7 +340,7 @@ export default function InventoryClerkDashboard() {
                             {item.product?.name || 'Unknown Product'}
                           </Typography>
                           {item.batch_number && (
-                            <Typography variant="caption" color="textSecondary">
+                            <Typography variant="caption" color="text.secondary">
                               Batch: {item.batch_number}
                             </Typography>
                           )}
@@ -357,7 +350,7 @@ export default function InventoryClerkDashboard() {
                         <TableCell>
                           <Typography
                             variant="body2"
-                            color={item.quantity_available === 0 ? 'error.main' : 'inherit'}
+                            color={item.quantity_available === 0 ? 'error' : 'inherit'}
                           >
                             {item.quantity_available}
                           </Typography>
@@ -393,7 +386,7 @@ export default function InventoryClerkDashboard() {
             <Typography variant="h6" gutterBottom>
               Low Stock Alerts
             </Typography>
-            
+
             {lowStockItems.length > 0 ? (
               <TableContainer component={Paper}>
                 <Table>
@@ -414,20 +407,20 @@ export default function InventoryClerkDashboard() {
                           <Typography variant="body2" fontWeight="medium">
                             {item.product?.name}
                           </Typography>
-                          <Typography variant="caption" color="textSecondary">
+                          <Typography variant="caption" color="text.secondary">
                             SKU: {item.product?.sku}
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2" color="error.main">
+                          <Typography variant="body2" color="error">
                             {item.quantity_available}
                           </Typography>
                         </TableCell>
                         <TableCell>{item.product?.reorder_level}</TableCell>
                         <TableCell>{item.location?.name || 'Main'}</TableCell>
                         <TableCell>
-                          <Typography variant="caption" color="textSecondary">
-                            {new Date(item.updated_at).toLocaleDateString()}
+                          <Typography variant="caption" color="text.secondary">
+                            {new Intl.DateTimeFormat('en-GH', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Africa/Accra' }).format(new Date(item.updated_at))}
                           </Typography>
                         </TableCell>
                         <TableCell>
@@ -463,7 +456,7 @@ export default function InventoryClerkDashboard() {
             </Alert>
             <Card>
               <CardContent>
-                <Typography variant="body2" color="textSecondary">
+                <Typography variant="body2" color="text.secondary">
                   This section will show:
                 </Typography>
                 <ul>
@@ -490,13 +483,13 @@ export default function InventoryClerkDashboard() {
                       <MapPin className="inline mr-2" size={20} />
                       Main Warehouse
                     </Typography>
-                    <Typography variant="body2" color="textSecondary" paragraph>
+                    <Typography variant="body2" color="text.secondary" paragraph>
                       Primary storage location for most inventory
                     </Typography>
                     <Typography variant="h4" color="primary.main">
                       {inventory.filter(item => item.location?.name === 'Main Warehouse').length}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       Items stored
                     </Typography>
                   </CardContent>
@@ -509,13 +502,13 @@ export default function InventoryClerkDashboard() {
                       <MapPin className="inline mr-2" size={20} />
                       Cold Storage
                     </Typography>
-                    <Typography variant="body2" color="textSecondary" paragraph>
+                    <Typography variant="body2" color="text.secondary" paragraph>
                       Temperature-controlled storage for perishables
                     </Typography>
                     <Typography variant="h4" color="info.main">
                       {inventory.filter(item => item.location?.name === 'Cold Storage').length}
                     </Typography>
-                    <Typography variant="body2" color="textSecondary">
+                    <Typography variant="body2" color="text.secondary">
                       Items stored
                     </Typography>
                   </CardContent>
@@ -532,7 +525,7 @@ export default function InventoryClerkDashboard() {
           </DialogTitle>
           <DialogContent>
             <Box sx={{ pt: 2 }}>
-              <Typography variant="body2" color="textSecondary" gutterBottom>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
                 Current Stock: {selectedItem?.quantity_available || 0}
               </Typography>
               <TextField
@@ -540,9 +533,9 @@ export default function InventoryClerkDashboard() {
                 label="Quantity Change"
                 type="number"
                 value={adjustmentForm.quantity_change}
-                onChange={(e) => setAdjustmentForm({ 
-                  ...adjustmentForm, 
-                  quantity_change: parseInt(e.target.value) || 0 
+                onChange={(e) => setAdjustmentForm({
+                  ...adjustmentForm,
+                  quantity_change: parseInt(e.target.value) || 0
                 })}
                 sx={{ mb: 2 }}
                 helperText="Use positive numbers to add stock, negative to remove"
@@ -574,8 +567,8 @@ export default function InventoryClerkDashboard() {
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setAdjustmentDialog(false)}>Cancel</Button>
-            <Button 
-              onClick={handleSaveAdjustment} 
+            <Button
+              onClick={handleSaveAdjustment}
               variant="contained"
               disabled={adjustmentForm.quantity_change === 0}
             >
@@ -583,7 +576,9 @@ export default function InventoryClerkDashboard() {
             </Button>
           </DialogActions>
         </Dialog>
+
       </Box>
     </ProtectedRoute>
   )
 }
+
