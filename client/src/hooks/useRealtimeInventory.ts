@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { supabase } from '@/lib/supabase'
 import { inventoryApi, type Inventory } from '@/lib/supabase-api'
 import { useRealtime } from '@/contexts/RealtimeContext'
@@ -16,12 +16,14 @@ interface UseRealtimeInventoryOptions {
 }
 
 export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) {
-  const { autoRefresh = true, filters = {} } = options
+  const { autoRefresh = true, filters } = options
   const { inventoryUpdates } = useRealtime()
   const [inventory, setInventory] = useState<Inventory[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  const stableFilters = useMemo(() => (filters || {}), [filters?.location_id, filters?.low_stock_only, filters?.out_of_stock_only])
 
   // Load initial inventory data
   const loadInventory = useCallback(async () => {
@@ -29,7 +31,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
       setLoading(true)
       setError(null)
       
-      const data = await inventoryApi.getInventory(filters)
+      const data = await inventoryApi.getInventory(stableFilters)
       setInventory(data || [])
       setLastUpdated(new Date())
     } catch (err) {
@@ -38,7 +40,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
     } finally {
       setLoading(false)
     }
-  }, [filters])
+  }, [stableFilters])
 
   // Update specific inventory item
   const updateInventoryItem = useCallback((updatedItem: Partial<Inventory> & { id: string }) => {
@@ -75,9 +77,9 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
         // Check if the new item matches our filters
         const newItem = latestUpdate.new
         const matchesFilters = 
-          (!filters.location_id || newItem.location_id === filters.location_id) &&
-          (!filters.low_stock_only || (newItem.product?.reorder_level !== undefined && newItem.quantity_available <= newItem.product.reorder_level)) &&
-          (!filters.out_of_stock_only || newItem.quantity_available === 0)
+          (!stableFilters.location_id || newItem.location_id === stableFilters.location_id) &&
+          (!stableFilters.low_stock_only || (newItem.product?.reorder_level !== undefined && newItem.quantity_available <= newItem.product.reorder_level)) &&
+          (!stableFilters.out_of_stock_only || newItem.quantity_available === 0)
         
         if (matchesFilters) {
           addInventoryItem(newItem)
@@ -87,9 +89,9 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
       case 'UPDATE':
         const updatedItem = latestUpdate.new
         const matchesFiltersAfterUpdate = 
-          (!filters.location_id || updatedItem.location_id === filters.location_id) &&
-          (!filters.low_stock_only || (updatedItem.product?.reorder_level !== undefined && updatedItem.quantity_available <= updatedItem.product.reorder_level)) &&
-          (!filters.out_of_stock_only || updatedItem.quantity_available === 0)
+          (!stableFilters.location_id || updatedItem.location_id === stableFilters.location_id) &&
+          (!stableFilters.low_stock_only || (updatedItem.product?.reorder_level !== undefined && updatedItem.quantity_available <= updatedItem.product.reorder_level)) &&
+          (!stableFilters.out_of_stock_only || updatedItem.quantity_available === 0)
         
         if (matchesFiltersAfterUpdate) {
           updateInventoryItem(updatedItem)
@@ -103,7 +105,7 @@ export function useRealtimeInventory(options: UseRealtimeInventoryOptions = {}) 
         removeInventoryItem(latestUpdate.old.id)
         break
     }
-  }, [inventoryUpdates, autoRefresh, filters, addInventoryItem, updateInventoryItem, removeInventoryItem])
+  }, [inventoryUpdates, autoRefresh, stableFilters, addInventoryItem, updateInventoryItem, removeInventoryItem])
 
   // Initial load
   useEffect(() => {

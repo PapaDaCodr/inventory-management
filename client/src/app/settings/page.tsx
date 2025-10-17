@@ -81,9 +81,11 @@ interface UserSettings {
 }
 
 const Settings = () => {
-  const { profile } = useAuth();
+  const { profile, updateProfile } = useAuth();
   const [tabValue, setTabValue] = useState(0);
   const [saveMessage, setSaveMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const [settings, setSettings] = useState<UserSettings>({
     // Profile settings
@@ -108,6 +110,30 @@ const Settings = () => {
     showTutorials: true,
   });
 
+
+  // Load persisted company settings (currency, timezone, and optional system settings)
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const { companySettingsApi } = await import('@/lib/supabase-api')
+        const cs = await companySettingsApi.getCompanySettings()
+        if (cs) {
+          setSettings(prev => ({
+            ...prev,
+            currency: cs.currency || prev.currency,
+            timezone: cs.timezone || prev.timezone,
+            ...(cs.system_settings ? {
+              language: (cs.system_settings as any).language || prev.language,
+              dateFormat: (cs.system_settings as any).dateFormat || prev.dateFormat,
+            } : {})
+          }))
+        }
+      } catch (e) {
+        console.error('Failed to load company settings:', e)
+      }
+    })()
+  }, [])
+
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
@@ -119,11 +145,53 @@ const Settings = () => {
     }));
   };
 
-  const handleSave = () => {
-    // Here you would typically save to your backend
-    console.log('Saving settings:', settings);
-    setSaveMessage('Settings saved successfully!');
-    setTimeout(() => setSaveMessage(''), 3000);
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const { companySettingsApi } = await import('@/lib/supabase-api');
+
+      // Persist company-level settings
+      const companyPayload = {
+        currency: settings.currency,
+        timezone: settings.timezone,
+        notification_settings: {
+          emailNotifications: settings.emailNotifications,
+          pushNotifications: settings.pushNotifications,
+          smsNotifications: settings.smsNotifications,
+        },
+        system_settings: {
+          language: settings.language,
+          dateFormat: settings.dateFormat,
+          darkMode: settings.darkMode,
+          compactView: settings.compactView,
+          showTutorials: settings.showTutorials,
+        },
+      };
+
+      // Persist user profile preferences
+      const profilePayload = {
+        full_name: settings.fullName,
+        email: settings.email,
+        contact_phone: settings.phone,
+      } as const;
+
+      await Promise.all([
+        companySettingsApi.saveCompanySettings(companyPayload),
+        updateProfile(profilePayload),
+      ]);
+
+      setSaveMessage('Settings saved successfully!');
+    } catch (e: any) {
+      console.error('Failed to save settings:', e);
+      setSaveError(e?.message || 'Failed to save settings');
+    } finally {
+      setSaving(false);
+      setTimeout(() => {
+        setSaveMessage('');
+        setSaveError('');
+      }, 3000);
+    }
   };
 
   return (
@@ -138,9 +206,13 @@ const Settings = () => {
           </Typography>
         </Box>
 
-        {saveMessage && (
-          <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSaveMessage('')}>
-            {saveMessage}
+        {(saveMessage || saveError) && (
+          <Alert
+            severity={saveError ? 'error' : 'success'}
+            sx={{ mb: 3 }}
+            onClose={() => { setSaveMessage(''); setSaveError(''); }}
+          >
+            {saveError || saveMessage}
           </Alert>
         )}
 
@@ -397,8 +469,9 @@ const Settings = () => {
               startIcon={<Save size={20} />}
               onClick={handleSave}
               size="large"
+              disabled={saving}
             >
-              Save Settings
+              {saving ? 'Saving…' : 'Save Settings'}
             </Button>
           </Box>
         </Paper>

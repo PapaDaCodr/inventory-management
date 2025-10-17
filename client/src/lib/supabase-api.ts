@@ -73,6 +73,18 @@ export interface Inventory {
   location?: { name: string }
 }
 
+export interface CompanySettings {
+  id: string
+  company_name: string
+  currency?: string
+  timezone?: string
+  notification_settings?: any
+  system_settings?: any
+  created_at: string
+  updated_at: string
+}
+
+
 export interface DashboardMetrics {
   totalProducts: number
   totalCategories: number
@@ -700,4 +712,62 @@ export const reportsApi = {
       },
     }
   }
+}
+
+
+// Company Settings API
+export const companySettingsApi = {
+  async getCompanySettings() {
+    const { data, error } = await supabase
+      .from('company_settings')
+      .select('id, company_name, currency, timezone, notification_settings, system_settings, created_at, updated_at')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+
+    // If table is empty, PostgREST may return code PGRST116 (No rows)
+    if (error && (error as any).code !== 'PGRST116') throw error
+    return (data || null) as CompanySettings | null
+  },
+
+  async updateCompanySettings(updates: Partial<CompanySettings>) {
+    const { data, error } = await supabase
+      .from('company_settings')
+      .update(updates)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as CompanySettings
+  },
+
+  async saveCompanySettings(payload: {
+    company_name?: string
+    currency?: string
+    timezone?: string
+    notification_settings?: any
+    system_settings?: any
+  }) {
+    const existing = await this.getCompanySettings()
+    if (existing) {
+      return this.updateCompanySettings(payload)
+    }
+
+    const { data, error } = await supabase
+      .from('company_settings')
+      .insert({
+        company_name: payload.company_name || 'Default Company',
+        currency: payload.currency,
+        timezone: payload.timezone,
+        notification_settings: payload.notification_settings,
+        system_settings: payload.system_settings,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as CompanySettings
+  },
 }
