@@ -10,11 +10,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
-    // 1) Create auth user (email confirmed)
+    // 1) Create auth user (email confirmed) with a forced password reset on first login
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
+      user_metadata: { must_reset_password: true },
     })
     if (authError) {
       return NextResponse.json({ error: authError.message }, { status: 400 })
