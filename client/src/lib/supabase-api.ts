@@ -461,6 +461,27 @@ export const transactionsApi = {
     const { data, error } = await query
     if (error) throw error
     return data
+  },
+
+  async getTodayKpis() {
+    const now = new Date()
+    const dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const dateTo = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+
+    const { data: txns, error } = await supabase
+      .from('transactions')
+      .select('id,total_amount,transaction_date,type')
+      .eq('type', 'sale')
+      .gte('transaction_date', dateFrom.toISOString())
+      .lt('transaction_date', dateTo.toISOString())
+
+    if (error) throw error
+
+    const totalSales = (txns || []).reduce((sum, t: any) => sum + (t.total_amount || 0), 0)
+    const totalTransactions = (txns || []).length
+    const averageSale = totalTransactions > 0 ? totalSales / totalTransactions : 0
+
+    return { totalSales, totalTransactions, averageSale }
   }
 }
 

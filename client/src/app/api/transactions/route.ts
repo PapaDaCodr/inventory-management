@@ -88,7 +88,6 @@ export async function POST(req: Request) {
           .update({
             quantity_available: newQuantity,
             quantity_on_hand: newQuantity,
-            last_updated: new Date().toISOString(),
           })
           .eq('id', target.id)
           .select('id')

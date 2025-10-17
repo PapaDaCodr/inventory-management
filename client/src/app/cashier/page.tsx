@@ -75,10 +75,13 @@ export default function CashierDashboard() {
     email: ''
   })
   const [processingPayment, setProcessingPayment] = useState(false)
+  const [todaysSales, setTodaysSales] = useState(0)
+  const [transactionsToday, setTransactionsToday] = useState(0)
 
   useEffect(() => {
     loadProducts()
     loadCustomers()
+    loadTodayKpis()
   }, [])
 
   const loadProducts = async () => {
@@ -99,6 +102,16 @@ export default function CashierDashboard() {
       setCustomers(customersData || [])
     } catch (error) {
       console.error('Error loading customers:', error)
+    }
+  }
+
+  const loadTodayKpis = async () => {
+    try {
+      const { totalSales, totalTransactions } = await transactionsApi.getTodayKpis()
+      setTodaysSales(totalSales)
+      setTransactionsToday(totalTransactions)
+    } catch (err) {
+      console.error("Error loading today's KPIs:", err)
     }
   }
 
@@ -124,8 +137,8 @@ export default function CashierDashboard() {
       removeFromCart(productId)
       return
     }
-    setCart(cart.map(item => 
-      item.id === productId 
+    setCart(cart.map(item =>
+      item.id === productId
         ? { ...item, quantity: newQuantity, total: item.price * newQuantity }
         : item
     ))
@@ -141,8 +154,8 @@ export default function CashierDashboard() {
   }
 
   const handleBarcodeSearch = () => {
-    const product = products.find(p => 
-      p.barcode === barcodeInput || 
+    const product = products.find(p =>
+      p.barcode === barcodeInput ||
       p.sku === barcodeInput ||
       p.name.toLowerCase().includes(barcodeInput.toLowerCase())
     )
@@ -211,6 +224,9 @@ Date: ${new Date().toLocaleString()}
       setAmountReceived('')
       setPaymentMethod('cash')
 
+      // Refresh today's KPIs
+      await loadTodayKpis()
+
     } catch (error) {
       console.error('Error processing payment:', error)
       alert('Error processing payment. Please try again.')
@@ -223,14 +239,12 @@ Date: ${new Date().toLocaleString()}
   const tax = subtotal * 0.08 // 8% tax
   const total = subtotal + tax
   const change = parseFloat(amountReceived) - total
+  const averageSale = transactionsToday > 0 ? todaysSales / transactionsToday : 0
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     product.sku.toLowerCase().includes(searchTerm.toLowerCase())
   ).slice(0, 20) // Limit to 20 products for performance
-
-  const todaysSales = 2847 // Mock data
-  const transactionsToday = 47 // Mock data
 
   if (loading) {
     return (
@@ -287,7 +301,7 @@ Date: ${new Date().toLocaleString()}
                 <Box display="flex" alignItems="center" gap={2}>
                   <Calculator className="text-purple-500" size={32} />
                   <Box>
-                    <Typography variant="h4">{formatCurrency(todaysSales / transactionsToday)}</Typography>
+                    <Typography variant="h4">{formatCurrency(averageSale)}</Typography>
                     <Typography variant="body2" color="textSecondary">
                       Average Sale
                     </Typography>
@@ -323,7 +337,7 @@ Date: ${new Date().toLocaleString()}
                 <Typography variant="h6" gutterBottom>
                   Product Selection
                 </Typography>
-                
+
                 {/* Barcode Scanner */}
                 <Box display="flex" gap={2} mb={3}>
                   <TextField
@@ -360,7 +374,7 @@ Date: ${new Date().toLocaleString()}
                   <Grid container spacing={1}>
                     {filteredProducts.map((product) => (
                       <Grid item xs={6} sm={4} md={3} key={product.id}>
-                        <Card 
+                        <Card
                           sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}
                           onClick={() => addToCart(product)}
                         >
@@ -425,8 +439,8 @@ Date: ${new Date().toLocaleString()}
                           </Typography>
                           <Box display="flex" justifyContent="between" alignItems="center" mt={1}>
                             <Box display="flex" alignItems="center" gap={1}>
-                              <IconButton 
-                                size="small" 
+                              <IconButton
+                                size="small"
                                 onClick={() => updateCartQuantity(item.id, item.quantity - 1)}
                               >
                                 <Minus size={16} />
@@ -434,8 +448,8 @@ Date: ${new Date().toLocaleString()}
                               <Typography variant="body2" sx={{ minWidth: 20, textAlign: 'center' }}>
                                 {item.quantity}
                               </Typography>
-                              <IconButton 
-                                size="small" 
+                              <IconButton
+                                size="small"
                                 onClick={() => updateCartQuantity(item.id, item.quantity + 1)}
                               >
                                 <Plus size={16} />
@@ -588,7 +602,7 @@ Date: ${new Date().toLocaleString()}
               <Typography variant="h5" color="primary.main" gutterBottom>
                 Total: {formatCurrency(total)}
               </Typography>
-              
+
               <FormControl fullWidth sx={{ mb: 2 }}>
                 <InputLabel>Payment Method</InputLabel>
                 <Select
