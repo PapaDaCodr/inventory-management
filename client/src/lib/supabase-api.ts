@@ -413,91 +413,17 @@ export const transactionsApi = {
     payment_reference?: string
     notes?: string
   }) {
-    // Generate transaction number
-    const transactionNumber = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 11).toUpperCase()}`
-
-    // Create the main transaction
-    const { data: transaction, error: transactionError } = await supabase
-      .from('transactions')
-      .insert({
-        transaction_number: transactionNumber,
-        type: 'sale',
-        customer_id: transactionData.customer_id,
-        cashier_id: transactionData.cashier_id,
-        subtotal: transactionData.subtotal,
-        tax_amount: transactionData.tax_amount,
-        discount_amount: transactionData.discount_amount || 0,
-        total_amount: transactionData.total_amount,
-        payment_method: transactionData.payment_method,
-        payment_reference: transactionData.payment_reference,
-        notes: transactionData.notes
-      })
-      .select()
-      .single()
-
-    if (transactionError) throw transactionError
-
-    // Create transaction items
-    const transactionItems = transactionData.items.map(item => ({
-      transaction_id: transaction.id,
-      product_id: item.product_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_price: item.total_price
-    }))
-
-    const { error: itemsError } = await supabase
-      .from('transaction_items')
-      .insert(transactionItems)
-
-    if (itemsError) throw itemsError
-
-    // Update inventory levels
-    for (const item of transactionData.items) {
-      // Get a target inventory row for this product
-      const { data: rows, error: invQueryError } = await supabase
-        .from('inventory')
-        .select('id, quantity_available')
-        .eq('product_id', item.product_id)
-        .order('updated_at', { ascending: false })
-        .limit(1)
-
-      if (invQueryError) {
-        console.warn(`Inventory lookup failed for product ${item.product_id}:`, invQueryError.message)
-        continue
-      }
-
-      if (!rows || rows.length === 0) {
-        console.warn(`No inventory row found for product ${item.product_id}; skipping stock decrement`)
-      } else {
-        const target = rows[0]
-        const newQuantity = Math.max(0, (target.quantity_available || 0) - item.quantity)
-
-        await supabase
-          .from('inventory')
-          .update({
-            quantity_available: newQuantity,
-            quantity_on_hand: newQuantity,
-            last_updated: new Date().toISOString()
-          })
-          .eq('id', target.id)
-      }
-
-      // Create stock movement record (always record movement even if no inventory row yet)
-      await supabase
-        .from('stock_movements')
-        .insert({
-          product_id: item.product_id,
-          movement_type: 'out',
-          quantity: -item.quantity, // Negative for outgoing
-          reference_type: 'transaction',
-          reference_id: transaction.id,
-          notes: `Sale - Transaction ${transactionNumber}`,
-          created_by: transactionData.cashier_id
-        })
+    // Use server-side API to perform atomic transaction and inventory updates (bypasses RLS)
+    const res = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transactionData),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json?.error || 'Failed to create transaction')
     }
-
-    return transaction
+    return json
   },
 
   async getTransactions(filters?: {
