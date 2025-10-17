@@ -73,6 +73,18 @@ export interface Inventory {
   location?: { name: string }
 }
 
+export interface CompanySettings {
+  id: string
+  company_name: string
+  currency?: string
+  timezone?: string
+  notification_settings?: any
+  system_settings?: any
+  created_at: string
+  updated_at: string
+}
+
+
 export interface DashboardMetrics {
   totalProducts: number
   totalCategories: number
@@ -401,85 +413,17 @@ export const transactionsApi = {
     payment_reference?: string
     notes?: string
   }) {
-    // Generate transaction number
-    const transactionNumber = `TXN-${Date.now()}-${Math.random().toString(36).slice(2, 11).toUpperCase()}`
-
-    // Create the main transaction
-    const { data: transaction, error: transactionError } = await supabase
-      .from('transactions')
-      .insert({
-        transaction_number: transactionNumber,
-        type: 'sale',
-        customer_id: transactionData.customer_id,
-        cashier_id: transactionData.cashier_id,
-        subtotal: transactionData.subtotal,
-        tax_amount: transactionData.tax_amount,
-        discount_amount: transactionData.discount_amount || 0,
-        total_amount: transactionData.total_amount,
-        payment_method: transactionData.payment_method,
-        payment_reference: transactionData.payment_reference,
-        notes: transactionData.notes
-      })
-      .select()
-      .single()
-
-    if (transactionError) throw transactionError
-
-    // Create transaction items
-    const transactionItems = transactionData.items.map(item => ({
-      transaction_id: transaction.id,
-      product_id: item.product_id,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_price: item.total_price
-    }))
-
-    const { error: itemsError } = await supabase
-      .from('transaction_items')
-      .insert(transactionItems)
-
-    if (itemsError) throw itemsError
-
-    // Update inventory levels
-    for (const item of transactionData.items) {
-      // Get current inventory
-      const { data: inventory, error: inventoryError } = await supabase
-        .from('inventory')
-        .select('quantity_available')
-        .eq('product_id', item.product_id)
-        .single()
-
-      if (inventoryError) {
-        console.warn(`Could not find inventory for product ${item.product_id}`)
-        continue
-      }
-
-      // Update inventory
-      const newQuantity = Math.max(0, inventory.quantity_available - item.quantity)
-      await supabase
-        .from('inventory')
-        .update({
-          quantity_available: newQuantity,
-          quantity_on_hand: newQuantity,
-          last_updated: new Date().toISOString()
-        })
-        .eq('product_id', item.product_id)
-
-      // Create stock movement record
-      await supabase
-        .from('stock_movements')
-        .insert({
-          product_id: item.product_id,
-          movement_type: 'out',
-          quantity: -item.quantity, // Negative for outgoing
-          reference_type: 'transaction',
-          reference_id: transaction.id,
-          notes: `Sale - Transaction ${transactionNumber}`,
-          created_by: transactionData.cashier_id
-        })
+    // Use server-side API to perform atomic transaction and inventory updates (bypasses RLS)
+    const res = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(transactionData),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      throw new Error(json?.error || 'Failed to create transaction')
     }
-
-    return transaction
+    return json
   },
 
   async getTransactions(filters?: {
@@ -517,6 +461,27 @@ export const transactionsApi = {
     const { data, error } = await query
     if (error) throw error
     return data
+  },
+
+  async getTodayKpis() {
+    const now = new Date()
+    const dateFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const dateTo = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+
+    const { data: txns, error } = await supabase
+      .from('transactions')
+      .select('id,total_amount,transaction_date,type')
+      .eq('type', 'sale')
+      .gte('transaction_date', dateFrom.toISOString())
+      .lt('transaction_date', dateTo.toISOString())
+
+    if (error) throw error
+
+    const totalSales = (txns || []).reduce((sum, t: any) => sum + (t.total_amount || 0), 0)
+    const totalTransactions = (txns || []).length
+    const averageSale = totalTransactions > 0 ? totalSales / totalTransactions : 0
+
+    return { totalSales, totalTransactions, averageSale }
   }
 }
 
@@ -700,4 +665,62 @@ export const reportsApi = {
       },
     }
   }
+}
+
+
+// Company Settings API
+export const companySettingsApi = {
+  async getCompanySettings() {
+    const { data, error } = await supabase
+      .from('company_settings')
+      .select('id, company_name, currency, timezone, notification_settings, system_settings, created_at, updated_at')
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .single()
+
+    // If table is empty, PostgREST may return code PGRST116 (No rows)
+    if (error && (error as any).code !== 'PGRST116') throw error
+    return (data || null) as CompanySettings | null
+  },
+
+  async updateCompanySettings(updates: Partial<CompanySettings>) {
+    const { data, error } = await supabase
+      .from('company_settings')
+      .update(updates)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as CompanySettings
+  },
+
+  async saveCompanySettings(payload: {
+    company_name?: string
+    currency?: string
+    timezone?: string
+    notification_settings?: any
+    system_settings?: any
+  }) {
+    const existing = await this.getCompanySettings()
+    if (existing) {
+      return this.updateCompanySettings(payload)
+    }
+
+    const { data, error } = await supabase
+      .from('company_settings')
+      .insert({
+        company_name: payload.company_name || 'Default Company',
+        currency: payload.currency,
+        timezone: payload.timezone,
+        notification_settings: payload.notification_settings,
+        system_settings: payload.system_settings,
+      })
+      .select()
+      .single()
+
+    if (error) throw error
+    return data as CompanySettings
+  },
 }

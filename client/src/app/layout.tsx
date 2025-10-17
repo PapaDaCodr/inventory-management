@@ -5,6 +5,7 @@ import DashboardWrapper from "./dashboardWrapper";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RealtimeProvider } from "@/contexts/RealtimeContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import MustResetPasswordGate from "./(components)/MustResetPasswordGate";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -22,6 +23,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
+          <MustResetPasswordGate />
           <RealtimeProvider>
             <NotificationProvider>
               <DashboardWrapper>{children}</DashboardWrapper>

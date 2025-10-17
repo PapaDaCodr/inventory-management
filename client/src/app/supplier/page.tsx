@@ -151,7 +151,7 @@ export default function SupplierDashboard() {
         ...productForm,
         base_price: parseFloat(productForm.base_price) || 0,
         cost_price: parseFloat(productForm.cost_price) || 0,
-        supplier_id: profile?.id, // Set current user as supplier
+        // supplier_id intentionally omitted; suppliers.id does not equal profiles.id
         is_active: true,
         reorder_level: 0,
         is_perishable: false,
