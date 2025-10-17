@@ -454,30 +454,36 @@ export const transactionsApi = {
 
     // Update inventory levels
     for (const item of transactionData.items) {
-      // Get current inventory
-      const { data: inventory, error: inventoryError } = await supabase
+      // Get a target inventory row for this product
+      const { data: rows, error: invQueryError } = await supabase
         .from('inventory')
-        .select('quantity_available')
+        .select('id, quantity_available')
         .eq('product_id', item.product_id)
-        .single()
+        .order('updated_at', { ascending: false })
+        .limit(1)
 
-      if (inventoryError) {
-        console.warn(`Could not find inventory for product ${item.product_id}`)
+      if (invQueryError) {
+        console.warn(`Inventory lookup failed for product ${item.product_id}:`, invQueryError.message)
         continue
       }
 
-      // Update inventory
-      const newQuantity = Math.max(0, inventory.quantity_available - item.quantity)
-      await supabase
-        .from('inventory')
-        .update({
-          quantity_available: newQuantity,
-          quantity_on_hand: newQuantity,
-          last_updated: new Date().toISOString()
-        })
-        .eq('product_id', item.product_id)
+      if (!rows || rows.length === 0) {
+        console.warn(`No inventory row found for product ${item.product_id}; skipping stock decrement`)
+      } else {
+        const target = rows[0]
+        const newQuantity = Math.max(0, (target.quantity_available || 0) - item.quantity)
 
-      // Create stock movement record
+        await supabase
+          .from('inventory')
+          .update({
+            quantity_available: newQuantity,
+            quantity_on_hand: newQuantity,
+            last_updated: new Date().toISOString()
+          })
+          .eq('id', target.id)
+      }
+
+      // Create stock movement record (always record movement even if no inventory row yet)
       await supabase
         .from('stock_movements')
         .insert({
