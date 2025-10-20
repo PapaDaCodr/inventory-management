@@ -7,3 +7,9 @@ server/.env/
 client/.next/
 .qodo
 create-sample-users.js
+CRUD_FIXES_SUMMARY.md
+CRUD_TESTING_GUIDE.md
+PROJECT_DEFENSE_GUIDE.md
+input.md
+TECHNICAL_DOCUMENTATION.md
+SIMS-Complete Development Specification.md
